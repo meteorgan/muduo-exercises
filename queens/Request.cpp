@@ -1,9 +1,9 @@
 #include "Request.h"
 #include "Queen.h"
 
-Request::Request(std::string clientId, std::string requestId, int size)
+Request::Request(std::string clientId, std::string requestId, int size, bool computeSolutions)
   : clientId(clientId), taskId(requestId), requestSize(size),
-    requestId(clientId + "-" + taskId) {
+    requestId(clientId + "-" + taskId), computeSolutions(computeSolutions) {
 }
 
 const std::map<int, std::vector<int>>& Request::splitRequest() {

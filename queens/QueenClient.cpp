@@ -28,6 +28,7 @@ class QueenClient {
   private:
     void onConnection(const muduo::net::TcpConnectionPtr& conn) {
       if(conn->connected()) {
+        //std::string request = "request-solutions " + std::to_string(seq) + " " + std::to_string(14);
         std::string request = "request " + std::to_string(seq) + " " + std::to_string(14);
         request += "\r\n";
         seq++;

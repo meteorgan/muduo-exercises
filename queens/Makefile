@@ -22,7 +22,7 @@ Queen.o: Queen.cpp Queen.h
 QueenServer.o: QueenServer.cpp QueenServer.h
 	g++ ${CFLAGS} -c QueenServer.cpp
 
-QueenWorker.o: QueenWorker.cpp
+QueenWorker.o: QueenWorker.cpp QueenTask.h
 	g++ ${CFLAGS} -c QueenWorker.cpp
 
 clean: 

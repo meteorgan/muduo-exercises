@@ -4,6 +4,8 @@
 #include "muduo/base/Logging.h"
 #include "muduo/net/EventLoop.h"
 
+//#include <google/profiler.h>
+
 #include <boost/bind.hpp>
 #include <boost/algorithm/string.hpp>
 
@@ -61,7 +63,8 @@ void QueenServer::processRequest(const muduo::net::TcpConnectionPtr& conn, std::
     size_t second = request.find(" ", first + 1);
     std::string taskId(request.begin()+first+1, request.begin()+second);
     int size = std::stoi(std::string(request.begin()+second+1, request.end()));
-    std::shared_ptr<Request> request(new Request(clientId, taskId, size));
+    bool computeSolutions = (request.find("request-solutions") == 0);
+    std::shared_ptr<Request> request(new Request(clientId, taskId, size, computeSolutions));
     LOG_INFO << "requestId " << request->getId();
     requests[request->getId()] = request;
     dispatchTask(request);
@@ -83,7 +86,10 @@ void QueenServer::processRequest(const muduo::net::TcpConnectionPtr& conn, std::
     LOG_INFO << "find solution for " << requestId << " subId: " << subtaskId;
     auto request = requests[requestId];
     request->setSubTaskSolutiosNumber(subtaskId, number);
-    if(number == 0 && request->isTaskFinish())
+
+    if(!request->isComputeSolutions() && request->isTaskFinish())
+      sendSolutionToClient(request);
+    else if(number == 0 && request->isTaskFinish())
       sendSolutionToClient(request);
   }
   else if(request.find("one_solution") == 0) {  // worker send one solution
@@ -113,10 +119,15 @@ void QueenServer::processRequest(const muduo::net::TcpConnectionPtr& conn, std::
 //TODO: better dispatch method
 void QueenServer::dispatchTask(std::shared_ptr<Request>& request) {
   const std::map<int, std::vector<int>> subtasks = request->splitRequest();
-  //<clientId> <id> <subid> <size> pos\r\n
+  //[solutions] <clientId> <id> <subid> <size> pos\r\n
+  std::string prefix = "";
+  if(request->isComputeSolutions())
+    prefix = "solutions " + request->getClientId() + " " + request->getTaskId();
+  else 
+    prefix = request->getClientId() + " " + request->getTaskId();
   for(auto &task : subtasks) {
-    std::string line = request->getClientId() + " " +  request->getTaskId() 
-                      + " " + std::to_string(task.first) + " " + std::to_string(request->getRequestSize());
+    std::string line = prefix + " " + std::to_string(task.first) 
+                       + " " + std::to_string(request->getRequestSize());
     for(auto &n : task.second) {
       line += " " + std::to_string(n);
     }
@@ -134,18 +145,21 @@ void QueenServer::sendSolutionToClient(std::shared_ptr<Request>& request) {
   std::string taskId(request->getTaskId());
   if(clients.find(clientId) != clients.end()) {
     auto client = clients[clientId];
-    std::list<std::vector<int>> solutions = request->getAllSolutions();
+    int solutionNum = request->getSolutionsNumber();
     //solution <id> <solution_number>\r\n
-    //<id> <solution>\r\n
-    std::string line = "solution " + taskId + " " + std::to_string(solutions.size()) + "\r\n";
+    std::string line = "solution " + taskId + " " + std::to_string(solutionNum) + "\r\n";
     client->send(line);
-    for(auto &solution : solutions) {
-      std::string one_solution = taskId;
-      for(auto &n : solution) {
-        one_solution += " " + std::to_string(n);
-      } 
-      one_solution += "\r\n";
-      client->send(one_solution);
+    //<id> <solution>\r\n
+    if(request->isComputeSolutions()) {
+      std::list<std::vector<int>> solutions = request->getAllSolutions();
+      for(auto &solution : solutions) {
+        std::string one_solution = taskId;
+        for(auto &n : solution) {
+          one_solution += " " + std::to_string(n);
+        } 
+        one_solution += "\r\n";
+        client->send(one_solution);
+      }
     }
 
     requests.erase(requestId);
@@ -157,6 +171,7 @@ void QueenServer::sendSolutionToClient(std::shared_ptr<Request>& request) {
 }
 
 int main(int argc, char** argv) {
+  //std::string program = std::string(argv[0]) + ".prof";
   std::string serverIP = "127.0.0.1";
   int serverPort = 9981;
   if(argc >= 2)
@@ -165,10 +180,14 @@ int main(int argc, char** argv) {
     serverPort = atoi(argv[2]);
   muduo::net::InetAddress serverAddr(serverIP, serverPort);
   muduo::net::EventLoop loop;
+
+  //ProfilerStart(program.c_str());
   QueenServer server(&loop, serverAddr);
   server.start();
 
   loop.loop();
+
+  //ProfilerStop();
 
   return 0;
 }

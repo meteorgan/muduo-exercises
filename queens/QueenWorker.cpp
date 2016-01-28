@@ -4,6 +4,7 @@
 #include "muduo/net/TcpClient.h"
 
 #include "Queen.h"
+#include "QueenTask.h"
 
 #include <boost/bind.hpp>
 #include <boost/algorithm/string.hpp>
@@ -29,6 +30,7 @@ class QueenWorker {
     void onConnection(const muduo::net::TcpConnectionPtr& conn) {
       if(conn->connected()) {
         LOG_INFO << "connect to " << conn->peerAddress().toIpPort();
+        conn->setTcpNoDelay(true);
         conn->send("ready\r\n");
       }
       else {
@@ -39,23 +41,26 @@ class QueenWorker {
 
     void onMessage(const muduo::net::TcpConnectionPtr& conn, 
                    muduo::net::Buffer* buffer, muduo::Timestamp time) {
-      //<clientId> <id> <subid> <size> <pos>\r\n
+      //[solutions] <clientId> <id> <subid> <size> <pos>\r\n
       while(buffer->findCRLF()) {
         const char* crlf = buffer->findCRLF();
         std::string request(buffer->peek(), crlf);
         buffer->retrieveUntil(crlf+2);
         LOG_INFO << "worker receive " << request;
 
+        bool computeSolutions = (request.find("solutions") == 0);
+        if(computeSolutions)
+          request = request.substr(request.find("solutions"), request.size());
         std::vector<std::string> tokens;
         boost::split(tokens, request, boost::is_any_of(" "));
-        if(tokens.size() >= 5) {
+        if(tokens.size() >= 4) {
           int size = std::stoi(tokens[3]);
           std::vector<int> pos;
           for(size_t i = 4; i < tokens.size(); ++i)
             pos.push_back(std::stoi(tokens[i]));
-          threadPool.run(boost::bind(&QueenWorker::processRequest, this, 
-                         conn, pos, size, tokens[0], tokens[1], tokens[2]));
-          //processRequest(conn, pos, size, tokens[0], tokens[1], tokens[2]);
+
+          QueenTask task(tokens[0], tokens[1], tokens[2], size, pos, computeSolutions);
+          threadPool.run(boost::bind(&QueenWorker::processRequest, this, conn, task));
         }
         else {
           LOG_ERROR << "receive bad request " << request << " from " << conn->peerAddress().toIpPort();
@@ -63,29 +68,30 @@ class QueenWorker {
       }
     }      
 
-    void processRequest(const muduo::net::TcpConnectionPtr& conn, std::vector<int>& pos, int size, 
-                        std::string clientId, std::string id, std::string subid) {
+    void processRequest(const muduo::net::TcpConnectionPtr& conn, const QueenTask& task) {
       std::list<std::vector<int>> queens;
-      if(pos.size() == 0) {
-        queens = solve_queens(size);
+      if(task.getPos().size() == 0) {
+        queens = solve_queens(task.getSize());
       }
       else {
-        queens = complete_queens(pos, size);
+        queens = complete_queens(task.getPos(), task.getSize());
       }
       int number = queens.size();
       // solutions <clientId> <id> <subid> <number>\r\n
-      std::string prefix = clientId + " " + id + " " + subid;
+      std::string prefix = task.getClientId() + " " + task.getTaskId() + " " + task.getSubTaskId();
       std::string res = "solutions " + prefix + " " + std::to_string(number) + "\r\n";
       conn->send(res);
       LOG_INFO << "send " << res.substr(0, res.size()-2) << " to server";
-      for(auto &queen : queens) {
-        // one_solution <client_id> <id> <subid> <solution>\r\n
-        std::string line = "one_solution " + prefix;
-        for(auto &n : queen) {
-          line += " " + std::to_string(n);
+      if(task.isComputeSolutions()) {
+        for(auto &queen : queens) {
+          // one_solution <client_id> <id> <subid> <solution>\r\n
+          std::string line = "one_solution " + prefix;
+          for(auto &n : queen) {
+            line += " " + std::to_string(n);
+          }
+          line += "\r\n";
+          conn->send(line);
         }
-        line += "\r\n";
-        conn->send(line);
       }
     }
 

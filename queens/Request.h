@@ -8,7 +8,7 @@
 
 class Request {
   public:
-    Request(std::string clientId, std::string requestId, int size);
+    Request(std::string clientId, std::string requestId, int size, bool computeSolutions = false);
 
     Request(Request&) = delete;
     Request& operator=(Request&) = delete;
@@ -39,9 +39,13 @@ class Request {
       subtaskSolutions[subId].push_back(solution);
     }
 
+    bool isComputeSolutions() const {
+      return computeSolutions;
+    }
+
     bool isSubTaskFinish(int subId) {
       return  (subtaskSolutionsNumber.find(subId) != subtaskSolutionsNumber.end())
-        && (subtaskSolutionsNumber[subId] == static_cast<int>(subtaskSolutions[subId].size()));
+        && ((!computeSolutions) || (subtaskSolutionsNumber[subId] == static_cast<int>(subtaskSolutions[subId].size())));
     }
 
     bool isTaskFinish() {
@@ -51,6 +55,14 @@ class Request {
       }
 
       return true;
+    }
+
+    int getSolutionsNumber() const {
+      int sum = 0;
+      for(auto &pair : subtaskSolutionsNumber)
+        sum += pair.second;
+
+      return sum;
     }
 
     std::list<std::vector<int>> getAllSolutions() const {
@@ -67,6 +79,7 @@ class Request {
     std::string taskId;
     int requestSize;
     std::string requestId;
+    bool computeSolutions;
     std::vector<int> subtaskIds;
     std::map<int, std::vector<int>> subtasks;
     std::map<int, int> subtaskSolutionsNumber;
