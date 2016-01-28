@@ -80,7 +80,13 @@ class QueenClient {
 };
 
 int main(int argc, char** argv) {
-  muduo::net::InetAddress serverAddr("127.0.0.1", 9981);
+  std::string serverIP = "127.0.0.1";
+  int serverPort = 9981;
+  if(argc >= 2)
+    serverIP = std::string(argv[1]);
+  if(argc >= 3)
+    serverPort = atoi(argv[2]);
+  muduo::net::InetAddress serverAddr(serverIP, serverPort);
   muduo::net::EventLoop loop;
   QueenClient client(&loop, serverAddr);
   client.connect();
