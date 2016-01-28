@@ -1,0 +1,6 @@
+TODO:
+1. task取消(client disconnected，取消它的所有task)
+2. server <-> worker 心跳
+3. worker宕机，转发worker上未完成的所有sub task
+4. server 多线程
+5. 监控(inspect)
