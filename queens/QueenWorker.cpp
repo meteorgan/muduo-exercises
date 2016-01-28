@@ -77,6 +77,7 @@ class QueenWorker {
       std::string prefix = clientId + " " + id + " " + subid;
       std::string res = "solutions " + prefix + " " + std::to_string(number) + "\r\n";
       conn->send(res);
+      LOG_INFO << "send " << res.substr(0, res.size()-2) << " to server";
       for(auto &queen : queens) {
         // one_solution <client_id> <id> <subid> <solution>\r\n
         std::string line = "one_solution " + prefix;
