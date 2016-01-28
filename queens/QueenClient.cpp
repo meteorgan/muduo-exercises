@@ -28,13 +28,11 @@ class QueenClient {
   private:
     void onConnection(const muduo::net::TcpConnectionPtr& conn) {
       if(conn->connected()) {
-        for(int i = 14; i >= 8; --i) {
-          std::string request = "request " + std::to_string(seq) + " " + std::to_string(i);
-          request += "\r\n";
-          seq++;
-          conn->send(request);
-          LOG_INFO << "send request " << request.substr(0, request.size()-2)  << " to server";
-        }
+        std::string request = "request " + std::to_string(seq) + " " + std::to_string(14);
+        request += "\r\n";
+        seq++;
+        conn->send(request);
+        LOG_INFO << "send request " << request.substr(0, request.size()-2)  << " to server";
       }
       else {
         LOG_INFO << conn->peerAddress().toIpPort() << " is down";

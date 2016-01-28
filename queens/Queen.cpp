@@ -67,7 +67,6 @@ std::list<std::vector<int>> solve_queens(int size) {
 
 std::list<std::vector<int>> complete_queens(const std::vector<int>& queen, int size) { 
   assert(queen.size() > 0);
-  std::cout << "thread id: " << std::this_thread::get_id() << std::endl;
   std::list<std::vector<int>> results;
   results.push_back(queen);
   for(int i = queen.size(); i < size; ++i) {

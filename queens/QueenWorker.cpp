@@ -20,6 +20,7 @@ class QueenWorker {
     }
 
     void start() {
+      LOG_INFO << "worker use " << numThread << " compute thread";
       threadPool.start(numThread);
       client.connect();
     }
