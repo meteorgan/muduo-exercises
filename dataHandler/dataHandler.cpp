@@ -6,12 +6,14 @@
 #include <boost/bind.hpp>
 
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <list>
 #include <fstream>
 
 DataHandler::DataHandler(muduo::net::EventLoop* loop, muduo::net::InetAddress& serverAddr)
-    : server(loop, serverAddr, "dataHandler"), filename(""), sorted(false), hasFreq(false) {
+    : server(loop, serverAddr, "dataHandler"), filename(""), 
+    sorted(false), hasFreq(false), lastPivot(0), lessFile(""), largeFile("") {
     server.setConnectionCallback(boost::bind(&DataHandler::onConnection, this, _1));
     server.setMessageCallback(boost::bind(&DataHandler::onMessage, this, _1, _2, _3));
 }
@@ -84,6 +86,8 @@ void DataHandler::onMessage(const muduo::net::TcpConnectionPtr& conn,
 
 void DataHandler::handleGenNumber(const muduo::net::TcpConnectionPtr& conn, int64_t number, char mode) {
     sorted = hasFreq = false;
+    filename = std::string(conn->localAddress().toIpPort().c_str()) + "-" 
+        + std::to_string(getpid());
     genNumbers(number, mode);
     conn->send("gen_num\r\n");
 }
@@ -122,10 +126,7 @@ void DataHandler::handleFreq(const muduo::net::TcpConnectionPtr& conn, int numbe
 // ....
 // sort end\r\n
 void DataHandler::handleSort(const muduo::net::TcpConnectionPtr& conn) {
-    if(!sorted) {
-        sortFile();
-        sorted = true;
-    }
+    sortFile();
     const int batchSize = 100;
     std::string prefix = "sort ";
     std::ifstream ifs(filename + "-sort");
@@ -221,20 +222,6 @@ void DataHandler::genNumbers(int64_t number, char mode) {
     }
 }
 
-void DataHandler::computeFreq(const std::string& input_file, const std::string& output_file) {
-    std::map<int64_t, int64_t> freqs;
-    std::ifstream infile(input_file);
-    int64_t n;
-    while(infile >> n) {
-        freqs[n]++;
-    }
-
-    std::ofstream ofs(output_file, std::ostream::out|std::ofstream::app);
-    for(const auto &pair :  freqs) {
-        ofs << pair.first << " " << pair.second << "\n";
-    } 
-}
-
 std::vector<std::string> DataHandler::splitLargeFile(const std::string& filename) {
     std::string name(filename);
     std::vector<std::string> files;
@@ -255,18 +242,41 @@ std::vector<std::string> DataHandler::splitLargeFile(const std::string& filename
     return files;
 }
 
+void DataHandler::computeFreq(const std::string& input_file, const std::string& output_file) {
+    std::map<int64_t, int64_t> freqs;
+    std::ifstream infile(input_file);
+    int64_t n;
+    while(infile >> n) {
+        freqs[n]++;
+    }
+
+    std::ofstream ofs(output_file, std::ostream::out|std::ofstream::app);
+    for(const auto &pair :  freqs) {
+        ofs << pair.first << " " << pair.second << "\n";
+    } 
+}
+
 void DataHandler::computeFreq() {
-    int64_t file_size = getFileSize(filename);
-    assert(file_size != -1);
-    if(file_size < 1024 * 1024 * 1024) {
+    int64_t fileSize = getFileSize(filename);
+    if(fileSize < fileSizeLimit) {
         std::string name_str = std::string(filename);
         computeFreq(name_str, name_str + "-freq");
     }
     else {
-        std::vector<std::string> files = splitLargeFile(filename);
-        for(const auto &file : files) {
-            computeFreq(file, std::string(filename)+"-freq");
-            std::remove(file.c_str());
+        sortFile();
+        std::ifstream ifs(filename + "-sort");
+        std::ofstream ofs(filename + "-freq");
+        int64_t currentNum = 0;
+        int64_t currentFreq = 0;
+        int64_t n;
+        while(ifs >> n) {
+            if(currentNum != n) {
+                if(currentFreq != 0)
+                    ofs << currentNum << " " << currentFreq << "\n";
+                currentNum = n;
+                currentFreq = 0;
+            }
+            ++currentFreq;
         }
     }
 }
@@ -341,23 +351,26 @@ void DataHandler::sortFile(const std::string input, const std::string output) {
 
 //TODO: recursive handle larger file
 void DataHandler::sortFile() {
-    int64_t fileSize = getFileSize(filename);
-    assert(fileSize != -1);
+    if(!sorted) {
+        int64_t fileSize = getFileSize(filename);
+        assert(fileSize != -1);
 
-    if(fileSize <= fileSizeLimit) {
-        sortFile(filename, filename + "-sort");
-    }
-    else {
-        std::vector<std::string> files = splitLargeFile(filename);
-        std::vector<std::string> sorted_files;
-        for(size_t i = 0; i < files.size(); ++i) {
-            std::string f = files[i] + "-sort";
-            sortFile(files[i], f);
-            sorted_files.push_back(f);
+        if(fileSize <= fileSizeLimit) {
+            sortFile(filename, filename + "-sort");
         }
-        mergeSortedFiles(sorted_files, filename + "-sort");
-        std::for_each(files.begin(), files.end(), [](std::string file) { std::remove(file.c_str()); });
-        std::for_each(sorted_files.begin(), sorted_files.end(), [](std::string file) { std::remove(file.c_str()); });
+        else {
+            std::vector<std::string> files = splitLargeFile(filename);
+            std::vector<std::string> sorted_files;
+            for(size_t i = 0; i < files.size(); ++i) {
+                std::string f = files[i] + "-sort";
+                sortFile(files[i], f);
+                sorted_files.push_back(f);
+            }
+            mergeSortedFiles(sorted_files, filename + "-sort");
+            std::for_each(files.begin(), files.end(), [](std::string file) { std::remove(file.c_str()); });
+            std::for_each(sorted_files.begin(), sorted_files.end(), [](std::string file) { std::remove(file.c_str()); });
+        }
+        sorted = true;
     }
 }
 
@@ -370,24 +383,61 @@ void DataHandler::handleSplit(const muduo::net::TcpConnectionPtr& conn, int64_t 
     conn->send("split " + data + "\r\n");
 }
 
+// remove all temp files
 std::vector<int64_t> DataHandler::splitFile(int64_t pivot) {
     std::vector<int64_t> results;
 
-    int64_t fileSize = getFileSize(filename);
+    std::string file = (lessFile != "") ? (lastPivot > pivot ? lessFile : largeFile) : filename;
+    int64_t fileSize = getFileSize(file);
     if(fileSize <= fileSizeLimit) {
         std::vector<int64_t> numbers = readAllNumbers(filename);
         int index = partition(numbers, pivot, 0, numbers.size()-1);
         int lessNumber = index + 1;
         int64_t oneLess = numbers[index/2];
-        int moreNumber = numbers.size() - index - 1;
-        int64_t oneMore = numbers[index+1+moreNumber/2];
+        int largeNumber = numbers.size() - index - 1;
+        int64_t oneLarge= numbers[index+1+largeNumber/2];
         results.push_back(lessNumber);
         results.push_back(oneLess);
-        results.push_back(moreNumber);
-        results.push_back(oneMore);
+        results.push_back(largeNumber);
+        results.push_back(oneLarge);
     }
     else {
+        std::string prefix = filename + "-" + std::to_string(pivot) + "-";
+        std::string newLessFile = prefix + "-less";
+        std::string newLargeFile = prefix + "-large";
+        std::ifstream ifs(file);
+        std::ofstream less(newLessFile);
+        std::ofstream large(newLargeFile);
+        int64_t lessNumber = 0;
+        int64_t oneLess = 0;
+        int64_t largeNumber = 0;
+        int64_t oneLarge = 0;
+        int64_t n;
+        while(ifs >> n) {
+            if(n <= pivot) {
+                less << n << "\n";
+                ++lessNumber;
+                oneLess = n;
+            }
+            else  {
+                large << n << "\n";
+                ++largeNumber;
+                oneLarge = n;
+            }
+        }
+        results.push_back(lessNumber);
+        results.push_back(oneLess);
+        results.push_back(largeNumber);
+        results.push_back(oneLarge);
+
+        if(file != filename) {
+            std::remove(lessFile.c_str());
+            std::remove(largeFile.c_str());
+        }
+        lessFile = newLessFile;
+        largeFile = newLargeFile;
     }
+    lastPivot = pivot;
 
     return results;
 }

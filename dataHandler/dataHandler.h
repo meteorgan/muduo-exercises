@@ -46,9 +46,12 @@ class DataHandler {
         std::string filename;
         bool sorted;
         bool hasFreq;
+        int64_t lastPivot;
+        std::string lessFile;
+        std::string largeFile;
         std::ifstream freqFile;
         std::ofstream sortedFile;
         const int fileSizeLimit = 10 * 1024 * 1024;
 };
 
-#endifvoid 
+#endif
