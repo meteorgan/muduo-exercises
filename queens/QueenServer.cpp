@@ -32,7 +32,7 @@ void QueenServer::onConnection(const muduo::net::TcpConnectionPtr& conn) {
     if(workers.find(client) != workers.end()) {
       LOG_INFO << "worker: " << client << " is down";
       workers.erase(client);
-      workerIds.erase(std::remove(workerIds.begin(), workerIds.end(), client), workerIds.end());
+      activeRequests.erase(client);
     }
     else {
       LOG_INFO << "client: " << client << " is left";
@@ -70,11 +70,11 @@ void QueenServer::processRequest(const muduo::net::TcpConnectionPtr& conn, std::
     dispatchTask(request);
   }
   else if(request.find("ready") == 0) {  // receive worker register
-    std::string worker(conn->peerAddress().toIpPort().c_str());
-    workers[worker] = conn;
-    workerIds.push_back(worker);
+    workers[clientId] = conn;
+    activeRequests[clientId] = 0;
   }
   else if(request.find("solutions") == 0) { // worker finish a request
+    --activeRequests[clientId];
     // solutions <clientId> <taskId> <subId> <number>
     std::vector<std::string> tokens;
     boost::split(tokens, request, boost::is_any_of(" "));
@@ -109,14 +109,13 @@ void QueenServer::processRequest(const muduo::net::TcpConnectionPtr& conn, std::
       sendSolutionToClient(request);
     }
   } 
-  else {
+ else {
     LOG_INFO << "receive: " << request << " from " << conn->peerAddress().toIpPort();
     conn->send("Bad request\r\n");
     conn->shutdown();
   }
 }
 
-//TODO: better dispatch method
 void QueenServer::dispatchTask(std::shared_ptr<Request>& request) {
   const std::map<int, std::vector<int>> subtasks = request->splitRequest();
   //[solutions] <clientId> <id> <subid> <size> pos\r\n
@@ -133,10 +132,26 @@ void QueenServer::dispatchTask(std::shared_ptr<Request>& request) {
     }
     line += "\r\n";
 
-    std::string workerId = workerIds[index % workerIds.size()];
-    ++index;
+    std::string workerId = findLeastLoadWorker();
     workers[workerId]->send(line);
+    ++activeRequests[workerId];
   }
+}
+
+std::string QueenServer::findLeastLoadWorker() {
+  std::vector<std::string> workers;
+  for(auto &pair : activeRequests)
+    workers.push_back(pair.first);
+  int minIndex = index;
+  size_t workerSize = workers.size();
+  for(size_t i = 1; i < workerSize; ++i) {
+    index = (index + i) % workerSize;   
+    if(activeRequests[workers[index]] < activeRequests[workers[minIndex]])
+      minIndex = index;
+  }
+
+  index = (minIndex + 1) % workerSize;
+  return workers[minIndex];
 }
 
 void QueenServer::sendSolutionToClient(std::shared_ptr<Request>& request) {
