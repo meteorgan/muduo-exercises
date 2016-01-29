@@ -19,21 +19,29 @@ class QueenClient {
     : client(loop, serverAddr, "queenClient"), seq(0) {
       client.setConnectionCallback(boost::bind(&QueenClient::onConnection, this, _1));
       client.setMessageCallback(boost::bind(&QueenClient::onMessage, this, _1, _2, _3));
+
+      client.connect();
     }
 
-    void connect() {
-      client.connect();
+
+    void sendRequest(int size, bool getSolutions) {
+      std::string request(""); 
+      if(getSolutions)
+        request = "request-solutions " + std::to_string(seq) + " " + std::to_string(size);
+      else
+        request = "request " + std::to_string(seq) + " " + std::to_string(size);
+      request += "\r\n";
+      seq++;
+      conn_->send(request); 
+
+      LOG_INFO << "send request " << request.substr(0, request.size()-2)  << " to server";
     }
 
   private:
     void onConnection(const muduo::net::TcpConnectionPtr& conn) {
       if(conn->connected()) {
-        //std::string request = "request-solutions " + std::to_string(seq) + " " + std::to_string(14);
-        std::string request = "request " + std::to_string(seq) + " " + std::to_string(14);
-        request += "\r\n";
-        seq++;
-        conn->send(request);
-        LOG_INFO << "send request " << request.substr(0, request.size()-2)  << " to server";
+        conn_ = conn;
+        sendRequest(14, false);
       }
       else {
         LOG_INFO << conn->peerAddress().toIpPort() << " is down";
@@ -74,6 +82,7 @@ class QueenClient {
 
     muduo::net::TcpClient client; 
     int seq;
+    muduo::net::TcpConnectionPtr conn_;
     std::map<int, int> solutionNumber;
     std::map<int, std::list<std::vector<int>>> solutions;
 };
@@ -88,7 +97,7 @@ int main(int argc, char** argv) {
   muduo::net::InetAddress serverAddr(serverIP, serverPort);
   muduo::net::EventLoop loop;
   QueenClient client(&loop, serverAddr);
-  client.connect();
+
   loop.loop();
 
   return 0;
