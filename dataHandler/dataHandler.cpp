@@ -2,24 +2,162 @@
 
 #include "muduo/base/Logging.h"
 
+#include <boost/algorithm/string.hpp>
+#include <boost/bind.hpp>
+
 #include <sys/stat.h>
 
 #include <list>
 #include <fstream>
 
 DataHandler::DataHandler(muduo::net::EventLoop* loop, muduo::net::InetAddress& serverAddr)
-    : server(loop, serverAddr, "dataHandler"), filename("") {
+    : server(loop, serverAddr, "dataHandler"), filename(""), sorted(false), hasFreq(false) {
+    server.setConnectionCallback(boost::bind(&DataHandler::onConnection, this, _1));
+    server.setMessageCallback(boost::bind(&DataHandler::onMessage, this, _1, _2, _3));
 }
 
 void DataHandler::onConnection(const muduo::net::TcpConnectionPtr& conn) {
+    std::string client(conn->peerAddress().toIpPort().c_str());
+    LOG_INFO << "client " << client << (conn->connected() ? " UP" : " DOWN");
 }
 
 void DataHandler::onMessage(const muduo::net::TcpConnectionPtr& conn,
                             muduo::net::Buffer* buffer, muduo::Timestamp time) {
+    while(buffer->findCRLF()) {
+        const char* crlf = buffer->findCRLF();
+        std::string request(buffer->peek(), crlf);
+        buffer->retrieveUntil(crlf+2);
+
+        std::vector<std::string> tokens;
+        boost::split(tokens, request, boost::is_any_of(" "));
+        if(request.find("gen_numbers") == 0) {       //gen_numbers <number> <mode>
+           int64_t number = std::stol(tokens[1]); 
+           char mode = tokens[2][0];
+           handleGenNumber(conn, number, mode);
+        }
+        else if(request.find("sort") == 0) {         
+            // sort-results <n1> <n2> ... <n>\r\n
+            // sort-results end\r\n
+            if(!sortedFile.is_open())
+                sortedFile.open(filename + "-sorted");
+            if(request.find("sort-results") == 0) {  
+                if(tokens[1] == "end")
+                    sortedFile.close();
+                else {
+                    for(size_t i = 1; i < tokens.size(); ++i)
+                        sortedFile << tokens[i] << "\n";
+                }
+            }
+            else {                                   // sort
+                handleSort(conn);
+            }
+        }
+        else if(request.find("average") == 0) {      // average
+            handleAverage(conn);
+        }
+        else if(request.find("most-freq") == 0) {   // most-freq <number>
+            int number = std::stoi(tokens[1]);
+            handleFreq(conn, number);
+        }
+        else if(request.find("split") == 0) {       // split <number>
+            int64_t number = std::stol(tokens[1]);
+            handleSplit(conn, number);
+        }
+        else if(request.find("random") == 0) {      // random
+            std::ifstream ifs(filename);
+            std::vector<int> numbers;
+            int size = 100;
+            int64_t n;
+            while(--size >= 0 && ifs >> n)
+                numbers.push_back(n);
+            std::sort(numbers.begin(), numbers.end());
+            int64_t target = numbers[numbers.size()/2]; 
+            std::string line = "random " + std::to_string(target) + "\r\n";
+            conn->send(line);
+        }
+        else {
+            LOG_ERROR << "receive bad request: " << request;
+            conn->shutdown();
+        }
+    }
 }
 
-double DataHandler::computeAverage() {
-   int64_t sum = 0L;
+void DataHandler::handleGenNumber(const muduo::net::TcpConnectionPtr& conn, int64_t number, char mode) {
+    sorted = hasFreq = false;
+    genNumbers(number, mode);
+    conn->send("gen_num\r\n");
+}
+
+// most-freq <n1, freq1> <n2, freq2> ... <n, freq>\r\n
+// ...
+// most-freq end\r\n
+void DataHandler::handleFreq(const muduo::net::TcpConnectionPtr& conn, int number) {
+    if(!hasFreq) {
+        computeFreq();
+        hasFreq = true;
+    }
+    if(!freqFile.is_open()) {
+        freqFile.open(filename);
+    }
+
+    const int batchSize = 100;
+    const std::string prefix("most-freq ");
+    while(number-- > 0 && !freqFile.eof()) {
+        std::string line(prefix);
+        int i = 0;
+        int64_t n;
+        while(++i < batchSize && freqFile >> n) {
+            line += " " + std::to_string(n);
+        }
+        line += "\r\n";
+        conn->send(line);
+    }
+    if(freqFile.eof()) {
+        freqFile.close();
+        conn->send(prefix + "end\r\n");
+    }
+}
+
+// sort <n1> <n2> ... <n>\r\n
+// ....
+// sort end\r\n
+void DataHandler::handleSort(const muduo::net::TcpConnectionPtr& conn) {
+    if(!sorted) {
+        sortFile();
+        sorted = true;
+    }
+    const int batchSize = 100;
+    std::string prefix = "sort ";
+    std::ifstream ifs(filename + "-sort");
+    int i = 0;
+    std::string line = prefix;
+    int64_t n;
+    while(ifs >> n) {
+       line += " " + std::to_string(n);
+       if(++i == batchSize) {
+           line += "\r\n";
+           conn->send(line);
+           line = prefix;
+           i = 0;
+       }
+    }
+    if(i != 0) {
+        line += "\r\n";
+        conn->send(line);
+    }
+    conn->send("sort end\r\n");
+}
+
+// average <number> <average>\r\n
+void DataHandler::handleAverage(const muduo::net::TcpConnectionPtr& conn) {
+    std::pair<int64_t, double> result = computeAverage();
+    std::string line = "average " + std::to_string(result.first) 
+                    + " " + std::to_string(result.second) + "\r\n";
+    conn->send(line);
+}
+
+std::pair<int64_t, double> DataHandler::computeAverage() {
+    int64_t sum = 0L;
     int64_t number = 0L;
 
     std::ifstream infile(filename);
@@ -30,12 +168,12 @@ double DataHandler::computeAverage() {
     }
     infile.close();
 
-    return double(sum) / number;
+    return std::make_pair(number, double(sum) / number);
 }
 
-int64_t DataHandler::getFileSize(const char* filename) {
+int64_t DataHandler::getFileSize(const std::string filename) {
     struct stat stat_buf;
-    int rc = stat(filename, &stat_buf);
+    int rc = stat(filename.c_str(), &stat_buf);
     return rc == 0? stat_buf.st_size : -1;
 }
 
@@ -94,17 +232,17 @@ void DataHandler::computeFreq(const std::string& input_file, const std::string& 
     std::ofstream ofs(output_file, std::ostream::out|std::ofstream::app);
     for(const auto &pair :  freqs) {
         ofs << pair.first << " " << pair.second << "\n";
-    }
+    } 
 }
 
-std::vector<std::string> DataHandler::splitLargeFile(const char* filename) {
+std::vector<std::string> DataHandler::splitLargeFile(const std::string& filename) {
     std::string name(filename);
     std::vector<std::string> files;
     std::ofstream outfiles[10];
     for(int i = 0; i < 10; ++i) {
         std::string n =  name + std::to_string(i);
         files.push_back(n);
-        outfiles[i] = std::ofstream(n);
+        outfiles[i].open(n);
     }
 
     std::ifstream infile(filename);
@@ -118,16 +256,16 @@ std::vector<std::string> DataHandler::splitLargeFile(const char* filename) {
 }
 
 void DataHandler::computeFreq() {
-    int64_t file_size = getFileSize(filename.c_str());
+    int64_t file_size = getFileSize(filename);
     assert(file_size != -1);
     if(file_size < 1024 * 1024 * 1024) {
         std::string name_str = std::string(filename);
-        compute_frequence(name_str, name_str + "-freq");
+        computeFreq(name_str, name_str + "-freq");
     }
     else {
         std::vector<std::string> files = splitLargeFile(filename);
         for(const auto &file : files) {
-            compute_frequence(file, std::string(filename)+"-freq");
+            computeFreq(file, std::string(filename)+"-freq");
             std::remove(file.c_str());
         }
     }
@@ -141,6 +279,16 @@ void DataHandler::readNumbers(std::ifstream &ifs, std::list<int64_t>& numbers, i
     }
 }
 
+std::vector<int64_t> DataHandler::readAllNumbers(const std::string file) {
+    std::vector<int64_t> numbers;
+    std::ifstream ifs(file);
+    int64_t n;
+    while(ifs >> n)
+        numbers.push_back(n);
+
+    return numbers;
+}
+
 void DataHandler::mergeSortedFiles(const std::vector<std::string>& files, const std::string& output) {
     const int read_size = 1000000;
     size_t size = files.size();
@@ -148,7 +296,7 @@ void DataHandler::mergeSortedFiles(const std::vector<std::string>& files, const 
     std::vector<bool> empty(size, false);
     std::ifstream *sorted_files = new std::ifstream[size];
     for(size_t i = 0; i < size; ++i) {
-        sorted_files[i] = std::ifstream(files[i]);
+        sorted_files[i].open(files[i]);
         readNumbers(sorted_files[i], buffers[i], read_size);
         if(buffers[i].size() < read_size)
             empty[i] = true;
@@ -183,11 +331,7 @@ void DataHandler::mergeSortedFiles(const std::vector<std::string>& files, const 
 }
 
 void DataHandler::sortFile(const std::string input, const std::string output) {
-    std::vector<int64_t> numbers;
-    std::ifstream ifs(input);
-    int64_t n;
-    while(ifs >> n)
-        numbers.push_back(n);
+    std::vector<int64_t> numbers = readAllNumbers(input);
     std::sort(numbers.begin(), numbers.end());
 
     std::ofstream ofs(output, std::ostream::out|std::ostream::app);
@@ -195,35 +339,61 @@ void DataHandler::sortFile(const std::string input, const std::string output) {
         ofs << n << "\n";
 }
 
+//TODO: recursive handle larger file
 void DataHandler::sortFile() {
-    int64_t file_size = getFileSize(filename.c_str());
-    assert(file_size != -1);
+    int64_t fileSize = getFileSize(filename);
+    assert(fileSize != -1);
 
-    std::string file = std::string(filename);
-    if(file_size < 10 * 1024 * 1024) {
-        sortFile(file, file + "-sort");
+    if(fileSize <= fileSizeLimit) {
+        sortFile(filename, filename + "-sort");
     }
     else {
-        std::vector<std::string> files = splitLargeFile(filename.c_str());
+        std::vector<std::string> files = splitLargeFile(filename);
         std::vector<std::string> sorted_files;
         for(size_t i = 0; i < files.size(); ++i) {
             std::string f = files[i] + "-sort";
             sortFile(files[i], f);
             sorted_files.push_back(f);
         }
-        mergeSortedFiles(sorted_files, file + "-sort");
+        mergeSortedFiles(sorted_files, filename + "-sort");
         std::for_each(files.begin(), files.end(), [](std::string file) { std::remove(file.c_str()); });
         std::for_each(sorted_files.begin(), sorted_files.end(), [](std::string file) { std::remove(file.c_str()); });
     }
 }
 
-int64_t partition(std::vector<int64_t> &numbers, int64_t start, int64_t end) {
+// split lessNumber one-less more-Number one-more\r\n
+void DataHandler::handleSplit(const muduo::net::TcpConnectionPtr& conn, int64_t number) {
+    std::vector<int64_t> numbers = splitFile(number);
+    std::string data("");
+    for(auto &n : numbers)
+        data += " " + std::to_string(n);
+    conn->send("split " + data + "\r\n");
+}
+
+std::vector<int64_t> DataHandler::splitFile(int64_t pivot) {
+    std::vector<int64_t> results;
+
+    int64_t fileSize = getFileSize(filename);
+    if(fileSize <= fileSizeLimit) {
+        std::vector<int64_t> numbers = readAllNumbers(filename);
+        int index = partition(numbers, pivot, 0, numbers.size()-1);
+        int lessNumber = index + 1;
+        int64_t oneLess = numbers[index/2];
+        int moreNumber = numbers.size() - index - 1;
+        int64_t oneMore = numbers[index+1+moreNumber/2];
+        results.push_back(lessNumber);
+        results.push_back(oneLess);
+        results.push_back(moreNumber);
+        results.push_back(oneMore);
+    }
+    else {
+    }
+
+    return results;
+}
+
+int DataHandler::partition(std::vector<int64_t>& numbers, int64_t pivot, int64_t start, int64_t end) {
     int64_t s = start;
-    size_t index = (end + start)/2;
-    int64_t pivot = numbers[index];
-    numbers[index] = numbers[start];
-    numbers[start] = pivot;
-    ++start;
     while(start < end) {
         while(start <= end && numbers[start] <= pivot)
             ++start;
@@ -235,46 +405,25 @@ int64_t partition(std::vector<int64_t> &numbers, int64_t start, int64_t end) {
             numbers[end] = temp;
         }
     }
-    if(s <= end) {
-       numbers[s] = numbers[end];
-       numbers[end] = pivot;
-
-       return end;
-    }
+    if(s <= end)
+        return end;
     else
         return s;
 }
 
-int64_t find_kth(std::vector<int64_t> &numbers, int64_t start, int64_t end, int64_t k) {
-    assert(end - start >= k);
-    int64_t index = partition(numbers, start, end);
-    int64_t pos = index - start;
-    if(pos == k) {
-        return numbers[index];
-    }
-    else if(pos > k) {
-        return find_kth(numbers, start, index-1, k);
-    }
-    else {
-        return find_kth(numbers, index+1, end, k-pos-1);
-    }
-}
-
-int64_t compute_median_in_memory(const char* filename) {
-    std::vector<int64_t> numbers;
-
-    std::ifstream infile(filename);
-    int64_t n;
-    while(infile >> n) {
-        numbers.push_back(n);
-    }
-    infile.close();
-
-    size_t size = numbers.size();
-    return find_kth(numbers, 0, size-1, size/2);
-}
-
 int main(int argc, char** argv) {
+    std::string serverIP = "127.0.0.1";
+    int port = 9981;
+    if(argc >= 2)
+        serverIP = std::string(argv[1]);
+    if(argc >= 3)
+        port = atoi(argv[2]);
+
+    muduo::net::EventLoop loop;
+    muduo::net::InetAddress serverAddr(serverIP, port);
+    DataHandler handler(&loop, serverAddr);
+
+    loop.loop();
 
     return 0;
 }
