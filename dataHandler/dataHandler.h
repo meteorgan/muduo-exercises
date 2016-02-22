@@ -33,6 +33,7 @@ class DataHandler {
         void mergeSortedFiles(const std::vector<std::string>&, const std::string&);
 
         std::pair<int64_t, double> computeAverage();
+        int64_t computeSum();
 
         void computeFreq();
         void computeFreq(const std::string&, const std::string&);
@@ -44,6 +45,7 @@ class DataHandler {
 
         muduo::net::TcpServer server;
         std::string filename;
+        int64_t fileNumber;
         bool sorted;
         bool hasFreq;
         int64_t lastPivot;

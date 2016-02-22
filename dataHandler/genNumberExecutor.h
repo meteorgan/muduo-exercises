@@ -6,7 +6,7 @@
 class GenNumberExecutor : public DataExecutor {
     public:
         GenNumberExecutor(std::map<std::string, muduo::net::TcpConnectionPtr>& conns)
-            : DataExecutor(conns) {}
+           : DataExecutor(conns)  {}
 
         void execute(int64_t number, char mode);
 

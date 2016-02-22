@@ -12,7 +12,7 @@
 #include <fstream>
 
 DataHandler::DataHandler(muduo::net::EventLoop* loop, muduo::net::InetAddress& serverAddr)
-    : server(loop, serverAddr, "dataHandler"), filename(""), 
+    : server(loop, serverAddr, "dataHandler"), filename(""), fileNumber(0),
     sorted(false), hasFreq(false), lastPivot(0), lessFile(""), largeFile("") {
     server.setConnectionCallback(boost::bind(&DataHandler::onConnection, this, _1));
     server.setMessageCallback(boost::bind(&DataHandler::onMessage, this, _1, _2, _3));
@@ -33,9 +33,9 @@ void DataHandler::onMessage(const muduo::net::TcpConnectionPtr& conn,
         std::vector<std::string> tokens;
         boost::split(tokens, request, boost::is_any_of(" "));
         if(request.find("gen_numbers") == 0) {       //gen_numbers <number> <mode>
-           int64_t number = std::stol(tokens[1]); 
+           fileNumber = std::stol(tokens[1]); 
            char mode = tokens[2][0];
-           handleGenNumber(conn, number, mode);
+           handleGenNumber(conn, fileNumber, mode);
         }
         else if(request.find("sort") == 0) {         
             // sort-results <n1> <n2> ... <n>\r\n
@@ -149,11 +149,11 @@ void DataHandler::handleSort(const muduo::net::TcpConnectionPtr& conn) {
     conn->send("sort end\r\n");
 }
 
-// average <number> <average>\r\n
+// average <number> <sum>\r\n
 void DataHandler::handleAverage(const muduo::net::TcpConnectionPtr& conn) {
-    std::pair<int64_t, double> result = computeAverage();
-    std::string line = "average " + std::to_string(result.first) 
-                    + " " + std::to_string(result.second) + "\r\n";
+    double sum = computeSum();
+    std::string line = "average " + std::to_string(fileNumber) 
+                    + " " + std::to_string(sum) + "\r\n";
     conn->send(line);
 }
 
@@ -170,6 +170,18 @@ std::pair<int64_t, double> DataHandler::computeAverage() {
     infile.close();
 
     return std::make_pair(number, double(sum) / number);
+}
+
+int64_t DataHandler::computeSum() {
+    int64_t sum = 0L;
+
+    std::ifstream infile(filename);
+    int64_t n;
+    while(infile >> n) {
+        sum += n;
+    }
+
+    return sum;
 }
 
 int64_t DataHandler::getFileSize(const std::string filename) {
