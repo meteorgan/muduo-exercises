@@ -156,7 +156,7 @@ void DataHandler::handleSort(const muduo::net::TcpConnectionPtr& conn) {
 
 // average <number> <sum>\r\n
 void DataHandler::handleAverage(const muduo::net::TcpConnectionPtr& conn) {
-    double sum = computeSum();
+    int64_t sum = computeSum();
     std::string line = "average " + std::to_string(fileNumber) 
                     + " " + std::to_string(sum) + "\r\n";
     conn->send(line);
@@ -202,7 +202,7 @@ void DataHandler::genNumbers(int64_t number, char mode) {
     std::mt19937 gen(rd());
     switch(mode) {
         case 'n': { // normal
-                      std::normal_distribution<float> dis(RAND_MAX/2, RAND_MAX/1024);
+                      std::normal_distribution<float> dis(RAND_MAX/8192, RAND_MAX/1024);
                       for(int64_t i = 0; i < number; ++i) {
                           int64_t n = static_cast<int64_t>(dis(gen));
                           ofs << n << "\n";

@@ -5,15 +5,18 @@
 double AverageExecutor::execute() {
     sum = 0;
     number = 0;
-    size = connections.size();
+    std::string message = "average\r\n";
+    for(auto& conn : connections)
+        conn.second->send(message);
 
+    size = connections.size();
     {
         std::unique_lock<std::mutex> lock(mt);
         while(size > 0)
             cond.wait(lock);
     }
 
-    return (double)sum/ number;
+    return (double)sum / number;
 }
 
 void AverageExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,
@@ -26,8 +29,9 @@ void AverageExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,
         std::vector<std::string> tokens;
         boost::split(tokens, response, boost::is_any_of(" "));
         if(tokens[0] == "average") {
-            sum += std::stol(tokens[1]);
-            number += std::stol(tokens[2]);
+            number += std::stol(tokens[1]);
+            sum += std::stol(tokens[2]);
+            LOG_INFO << "receive average " << response << " from " << conn->peerAddress().toIpPort();
 
             {
                 std::unique_lock<std::mutex> lock(mt);
