@@ -18,6 +18,10 @@ DataHandler::DataHandler(muduo::net::EventLoop* loop, muduo::net::InetAddress& s
     server.setMessageCallback(boost::bind(&DataHandler::onMessage, this, _1, _2, _3));
 }
 
+void DataHandler::start() {
+    server.start();
+}
+
 void DataHandler::onConnection(const muduo::net::TcpConnectionPtr& conn) {
     std::string client(conn->peerAddress().toIpPort().c_str());
     LOG_INFO << "client " << client << (conn->connected() ? " UP" : " DOWN");
@@ -29,6 +33,7 @@ void DataHandler::onMessage(const muduo::net::TcpConnectionPtr& conn,
         const char* crlf = buffer->findCRLF();
         std::string request(buffer->peek(), crlf);
         buffer->retrieveUntil(crlf+2);
+        LOG_INFO << "dataHandler receive " << request;
 
         std::vector<std::string> tokens;
         boost::split(tokens, request, boost::is_any_of(" "));
@@ -484,6 +489,7 @@ int main(int argc, char** argv) {
     muduo::net::EventLoop loop;
     muduo::net::InetAddress serverAddr(serverIP, port);
     DataHandler handler(&loop, serverAddr);
+    handler.start();
 
     loop.loop();
 

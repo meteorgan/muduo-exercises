@@ -1,5 +1,6 @@
 #include "dataServer.h"
 #include "genNumberExecutor.h"
+#include "averageExecutor.h"
 
 #include "muduo/base/Logging.h"
 
@@ -18,13 +19,15 @@ DataServer::DataServer(muduo::net::EventLoop* loop,
 void DataServer::start() {
     server_.start();
     int seq = 1;
+    muduo::net::EventLoop* workerLoop = workerLoopThread.startLoop();
     for(auto& addr : workerAddrs) {
         std::string workerId = "worker-" + std::to_string(seq);
         auto worker = std::unique_ptr<muduo::net::TcpClient>(
-                new muduo::net::TcpClient(loop_, addr, workerId.c_str()));
+                new muduo::net::TcpClient(workerLoop, addr, workerId.c_str()));
         worker->setConnectionCallback(boost::bind(&DataServer::onWorkerConnection, this, _1));
+        worker->setMessageCallback(boost::bind(&DataServer::onWorkerMessage, this, _1, _2, _3));
         worker->connect();
-        std::string peer(worker->connection()->peerAddress().toIpPort().c_str());
+        std::string peer(addr.toIpPort().c_str());
         workers.insert(std::make_pair(peer, std::move(worker)));
 
         ++seq;
@@ -32,10 +35,11 @@ void DataServer::start() {
 
     {
         size = workers.size();
-        std::unique_lock<std::mutex> lock;
+        std::unique_lock<std::mutex> lock(mt);
         while(size > 0)
             cond.wait(lock);
     }
+    LOG_INFO << "server connected to all workers";
 }
 
 void DataServer::onClientConnection(const muduo::net::TcpConnectionPtr& conn) {
@@ -44,9 +48,10 @@ void DataServer::onClientConnection(const muduo::net::TcpConnectionPtr& conn) {
 
 // command:
 // 1. genNumber n   response: ok
-// 2. average       response: number
-// 3. freq n        response: n1 n2 ... n
+// 2. average       response: number<double>
+// 3. median        response: number<int64_t>
 // 4. sort          response: ok
+// 5. freq n        response: n1 n2 ... n
 void DataServer::onClientMessage(const muduo::net::TcpConnectionPtr& conn,
         muduo::net::Buffer* buf, muduo::Timestamp time) {
     while(buf->findCRLF()) {
@@ -57,13 +62,21 @@ void DataServer::onClientMessage(const muduo::net::TcpConnectionPtr& conn,
         boost::split(tokens, command, boost::is_any_of(" "));
         if(command.find("genNumber") == 0) {
             GenNumberExecutor executor(connections);        
-            for(auto& worker : workers) 
-                worker.second->setMessageCallback(boost::bind(&GenNumberExecutor::onMessage, &executor, _1, _2, _3));
+            dataExecutor = &executor;
             int64_t number = std::stol(tokens[1]);
             char mode = tokens[2][0];
             executor.execute(number, mode);
+
+            conn->send("ok\r\n");
         }
         else if(command == "average") {
+            AverageExecutor executor(connections);
+            dataExecutor = &executor;
+            double average = executor.execute();
+
+            conn->send(std::to_string(average) + "\r\n");
+        }
+        else if(command == "median") {
         }
         else if(command == "sort") {
         }
@@ -94,4 +107,47 @@ void DataServer::onWorkerConnection(const muduo::net::TcpConnectionPtr& conn) {
         workers.erase(peer);
         connections.erase(peer);
     }
+}
+
+void DataServer::onWorkerMessage(const muduo::net::TcpConnectionPtr& conn,
+        muduo::net::Buffer* buf, muduo::Timestamp time) {
+    dataExecutor->onMessage(conn, buf, time);
+}
+
+int main(int argc, char** argv) {
+    if(argc <= 1) {
+        LOG_ERROR << "usage: DataServer [-h ip port] worker1IP worker1Port ...";
+        return -1;
+    }
+
+    std::string serverIp = "127.0.0.1";
+    int port = 9980;
+    int pos = 1;
+    if(strcmp(argv[1], "-h") == 0) {
+        serverIp = std::string(argv[1]);
+        port = std::stoi(argv[2]);
+
+        pos += 2;
+    }
+
+    if(argc <= pos + 1) {
+        LOG_ERROR << "usage: DataServer [-h ip port] worker1IP worker1Port ...";
+        return -1;
+    }
+    std::vector<muduo::net::InetAddress> workerAddrs;
+    for(int i = pos; i < argc; i += 2) {
+        std::string ip = std::string(argv[i]);
+        int p = std::stoi(argv[i+1]);
+        muduo::net::InetAddress addr(ip, p);
+        workerAddrs.push_back(addr);
+    }
+
+    muduo::net::InetAddress addr(serverIp, port);
+    muduo::net::EventLoop loop;
+    DataServer server(&loop, addr, workerAddrs);
+    server.start();
+
+    loop.loop();
+
+    return 0;
 }

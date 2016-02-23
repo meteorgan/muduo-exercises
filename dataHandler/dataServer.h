@@ -3,6 +3,10 @@
 
 #include "muduo/net/TcpClient.h"
 #include "muduo/net/TcpServer.h"
+#include "muduo/net/EventLoop.h"
+#include "muduo/net/EventLoopThread.h"
+
+#include "dataExecutor.h"
 
 #include <mutex>
 #include <condition_variable>
@@ -22,7 +26,7 @@ class DataServer {
                              muduo::Timestamp time);
 
         void onWorkerConnection(const muduo::net::TcpConnectionPtr& conn);
-        void onWorkerMessage(const muduo::net::TcpConnectionPtr& conn,
+        void onWorkerMessage(const muduo::net::TcpConnectionPtr& conn, 
                              muduo::net::Buffer* buf,
                              muduo::Timestamp time);
 
@@ -35,6 +39,8 @@ class DataServer {
         std::mutex mt;
         std::condition_variable cond;
         int size;
+        muduo::net::EventLoopThread workerLoopThread;
+        DataExecutor* dataExecutor;
 };
 
 #endif

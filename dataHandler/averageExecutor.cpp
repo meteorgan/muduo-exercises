@@ -16,7 +16,7 @@ double AverageExecutor::execute() {
     return (double)sum/ number;
 }
 
-void AverageExecutor::onMessge(const muduo::net::TcpConnectionPtr& conn,
+void AverageExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,
         muduo::net::Buffer* buf, muduo::Timestamp time) {
     while(buf->findCRLF()) {
         const char* crlf = buf->findCRLF();

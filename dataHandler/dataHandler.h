@@ -12,6 +12,9 @@
 class DataHandler {
     public:
         DataHandler(muduo::net::EventLoop* loop, muduo::net::InetAddress& serverAddr);
+
+        void start();
+
         void handleGenNumber(const muduo::net::TcpConnectionPtr&, int64_t, char);
         void handleFreq(const muduo::net::TcpConnectionPtr&, int);
         void handleSort(const muduo::net::TcpConnectionPtr&);

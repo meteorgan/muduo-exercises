@@ -13,10 +13,10 @@ class DataExecutor {
         DataExecutor(std::map<std::string, muduo::net::TcpConnectionPtr>& conns)
             :connections(conns), size(connections.size()) {}
 
-    protected:
         virtual void onMessage(const muduo::net::TcpConnectionPtr& conn, 
                                muduo::net::Buffer* buf, muduo::Timestamp time) = 0;
 
+    protected:
         std::map<std::string, muduo::net::TcpConnectionPtr>& connections;
         int size;
         std::mutex mt;

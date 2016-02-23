@@ -10,7 +10,7 @@ class AverageExecutor : public DataExecutor {
 
         double execute();
 
-        virtual void onMessge(const muduo::net::TcpConnectionPtr& conn,
+        virtual void onMessage(const muduo::net::TcpConnectionPtr& conn,
                 muduo::net::Buffer* buf, muduo::Timestamp time);
 
     private:

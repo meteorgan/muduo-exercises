@@ -2,12 +2,13 @@
 
 void GenNumberExecutor::execute(int64_t number, char mode) {
     size = connections.size();
-    std::string message = "gen_numebrs " + std::to_string(number)
+    std::string message = "gen_numbers " + std::to_string(number)
         + " " + mode + "\r\n";
     for(auto& conn: connections) {
         conn.second->send(message);
     }
-    
+    LOG_INFO << "send message " << message.substr(0, message.size()-2) << " to all workers";
+
     {
         std::unique_lock<std::mutex> lock(mt);
         while(size > 0)
@@ -17,7 +18,6 @@ void GenNumberExecutor::execute(int64_t number, char mode) {
 
 void GenNumberExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,
         muduo::net::Buffer* buf, muduo::Timestamp time) {
-
     while(buf->findCRLF()) {
         const char* crlf = buf->findCRLF();
         std::string response(buf->peek(), crlf);
