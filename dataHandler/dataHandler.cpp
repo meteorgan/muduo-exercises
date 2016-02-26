@@ -38,16 +38,21 @@ void DataHandler::onMessage(const muduo::net::TcpConnectionPtr& conn,
         std::vector<std::string> tokens;
         boost::split(tokens, request, boost::is_any_of(" "));
         if(request.find("gen_numbers") == 0) {       //gen_numbers <number> <mode>
-           fileNumber = std::stol(tokens[1]); 
+           fileNumber = std::stol(tokens[1]);
            char mode = tokens[2][0];
            handleGenNumber(conn, fileNumber, mode);
         }
-        else if(request.find("sort") == 0) {         
-            // sort-results <n1> <n2> ... <n>\r\n
-            // sort-results end\r\n
-            if(!sortedFile.is_open())
-                sortedFile.open(filename + "-sorted");
-            if(request.find("sort-results") == 0) {  
+        else if(request.find("sort") == 0) {
+            /**
+             * store sorted numbers
+             * protocal:
+             * sort-results <n1> <n2> ... <n>\r\n
+             * sort-results end\r\n
+             */
+            if(request.find("sort-results") == 0) {
+                if(!sortedFile.is_open())
+                    sortedFile.open(filename + "-sorted");
+
                 if(tokens[1] == "end")
                     sortedFile.close();
                 else {
@@ -55,14 +60,15 @@ void DataHandler::onMessage(const muduo::net::TcpConnectionPtr& conn,
                         sortedFile << tokens[i] << "\n";
                 }
             }
-            else {                                   // sort
-                handleSort(conn);
+            else {                                   // sort or sort-more
+                int size = std::stoi(tokens[1]);
+                handleSort(conn, tokens[0], size);
             }
         }
         else if(request.find("average") == 0) {      // average
             handleAverage(conn);
         }
-        else if(request.find("most-freq") == 0) {   // most-freq <number>
+        else if(request.find("freq") == 0) {         // freq <number>
             int number = std::stoi(tokens[1]);
             handleFreq(conn, number);
         }
@@ -97,20 +103,20 @@ void DataHandler::handleGenNumber(const muduo::net::TcpConnectionPtr& conn, int6
     conn->send("gen_num\r\n");
 }
 
-// most-freq <n1, freq1> <n2, freq2> ... <n, freq>\r\n
+// freq <n1, freq1> <n2, freq2> ... <n, freq>\r\n
 // ...
-// most-freq end\r\n
+// freq end\r\n
 void DataHandler::handleFreq(const muduo::net::TcpConnectionPtr& conn, int number) {
     if(!hasFreq) {
         computeFreq();
         hasFreq = true;
     }
     if(!freqFile.is_open()) {
-        freqFile.open(filename);
+        freqFile.open(filename + "-freq");
     }
 
     const int batchSize = 100;
-    const std::string prefix("most-freq ");
+    const std::string prefix("freq ");
     while(number-- > 0 && !freqFile.eof()) {
         std::string line(prefix);
         int i = 0;
@@ -127,31 +133,31 @@ void DataHandler::handleFreq(const muduo::net::TcpConnectionPtr& conn, int numbe
     }
 }
 
+// sort-number <number>\r\n
 // sort <n1> <n2> ... <n>\r\n
 // ....
-// sort end\r\n
-void DataHandler::handleSort(const muduo::net::TcpConnectionPtr& conn) {
-    sortFile();
-    const int batchSize = 100;
-    std::string prefix = "sort ";
-    std::ifstream ifs(filename + "-sort");
-    int i = 0;
-    std::string line = prefix;
-    int64_t n;
-    while(ifs >> n) {
-       line += " " + std::to_string(n);
-       if(++i == batchSize) {
-           line += "\r\n";
-           conn->send(line);
-           line = prefix;
-           i = 0;
-       }
+// sort <n1> <n2> ... <n> end\r\n
+void DataHandler::handleSort(const muduo::net::TcpConnectionPtr& conn, std::string command, int size) {
+    if(command == "sort") { 
+        sortFile();
+        stFile.open(filename + "-sort");
+        std::string number = "sort " + std::to_string(fileNumber) + "\r\n";
+        conn->send(number);
     }
-    if(i != 0) {
+    else {       // sort-more
+        int i = 0;
+        std::string line = "sort";
+        int64_t n;
+        while(stFile >> n && (i++ < size)) {
+           line += " " + std::to_string(n);
+        }
+        if(stFile.eof()) {
+            stFile.close();
+            line += " end";
+        }
         line += "\r\n";
         conn->send(line);
     }
-    conn->send("sort end\r\n");
 }
 
 // average <number> <sum>\r\n
@@ -256,6 +262,9 @@ std::vector<std::string> DataHandler::splitLargeFile(const std::string& filename
         outfiles[mod] << n << "\n";
     }
 
+    for(int i = 0;i < 10; ++i)
+        outfiles[i].close();
+
     return files;
 }
 
@@ -273,6 +282,7 @@ void DataHandler::computeFreq(const std::string& input_file, const std::string& 
     } 
 }
 
+// freq file must be sorted
 void DataHandler::computeFreq() {
     int64_t fileSize = getFileSize(filename);
     if(fileSize < fileSizeLimit) {
@@ -280,6 +290,8 @@ void DataHandler::computeFreq() {
         computeFreq(name_str, name_str + "-freq");
     }
     else {
+        // data may be too much, can not store freqs in memory
+        // first sort them, then write freqs in file
         sortFile();
         std::ifstream ifs(filename + "-sort");
         std::ofstream ofs(filename + "-freq");
@@ -354,6 +366,8 @@ void DataHandler::mergeSortedFiles(const std::vector<std::string>& files, const 
         }
     }
 
+    for(size_t i = 0; i < size; ++i)
+        sorted_files[i].close();
     delete[] sorted_files;
 }
 

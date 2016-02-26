@@ -17,7 +17,7 @@ class DataHandler {
 
         void handleGenNumber(const muduo::net::TcpConnectionPtr&, int64_t, char);
         void handleFreq(const muduo::net::TcpConnectionPtr&, int);
-        void handleSort(const muduo::net::TcpConnectionPtr&);
+        void handleSort(const muduo::net::TcpConnectionPtr&, std::string command, int size);
         void handleAverage(const muduo::net::TcpConnectionPtr&);
         void handleSplit(const muduo::net::TcpConnectionPtr&, int64_t);
 
@@ -55,6 +55,7 @@ class DataHandler {
         std::string lessFile;
         std::string largeFile;
         std::ifstream freqFile;
+        std::ifstream stFile;
         std::ofstream sortedFile;
         const int fileSizeLimit = 10 * 1024 * 1024;
 };
