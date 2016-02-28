@@ -18,7 +18,7 @@ class DataExecutor {
 
     protected:
         std::map<std::string, muduo::net::TcpConnectionPtr>& connections;
-        int size;
+        size_t size;
         std::mutex mt;
         std::condition_variable cond;
 };

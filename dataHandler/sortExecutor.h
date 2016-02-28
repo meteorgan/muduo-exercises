@@ -11,14 +11,14 @@
 class SortExecutor : public DataExecutor {
     public:
         SortExecutor(std::map<std::string, muduo::net::TcpConnectionPtr>& conns)
-            : DataExecutor(conns), number(0), total(0), workingSize(0),
-            sendNumber(0) {
+            : DataExecutor(conns), number(0), workingSize(0), sendNumber(0) {
                 for(auto& conn : connections) {
-                    std::string id(conn.second->peerAddress().toIpPort().c_str());
+                    std::string id(conn.first);
                     workerBuffers[id] = std::list<std::string>();
                     notFinishedWorkers.insert(id);
+                    workerStatus[id] = false;
                 }
-                currentOutput = outputBuffer.begin();
+                currentOutput = workerStatus.begin();
             }
 
         void execute();
@@ -29,15 +29,15 @@ class SortExecutor : public DataExecutor {
     private:
         void mergeNumbers();
 
-        const int batchSize = 1014;
+        const int batchSize = 1024;
         int64_t number;
-        int total;
-        int workingSize;
+        size_t workingSize;
         int64_t sendNumber;
         std::map<std::string, std::list<std::string>> workerBuffers;
         std::list<std::string> outputBuffer;
         std::set<std::string> notFinishedWorkers;
-        std::list<std::string>::iterator currentOutput;
+        std::map<std::string, bool> workerStatus;
+        std::map<std::string, bool>::iterator currentOutput;
 };
 
 #endif

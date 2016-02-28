@@ -1,6 +1,7 @@
 #include "dataServer.h"
 #include "genNumberExecutor.h"
 #include "averageExecutor.h"
+#include "sortExecutor.h"
 
 #include "muduo/base/Logging.h"
 
@@ -67,7 +68,7 @@ void DataServer::onClientMessage(const muduo::net::TcpConnectionPtr& conn,
             char mode = tokens[2][0];
             executor.execute(number, mode);
 
-            conn->send("ok\r\n");
+            conn->send("OK\r\n");
         }
         else if(command == "average") {
             AverageExecutor executor(connections);
@@ -79,6 +80,11 @@ void DataServer::onClientMessage(const muduo::net::TcpConnectionPtr& conn,
         else if(command == "median") {
         }
         else if(command == "sort") {
+            SortExecutor executor(connections);
+            dataExecutor = &executor;
+            executor.execute();
+
+            conn->send("OK\r\n");
         }
         else if(command.find("freq") == 0) {
         }
@@ -114,6 +120,7 @@ void DataServer::onWorkerMessage(const muduo::net::TcpConnectionPtr& conn,
     dataExecutor->onMessage(conn, buf, time);
 }
 
+
 int main(int argc, char** argv) {
     if(argc <= 1) {
         LOG_ERROR << "usage: DataServer [-h ip port] worker1IP worker1Port ...";
@@ -121,11 +128,11 @@ int main(int argc, char** argv) {
     }
 
     std::string serverIp = "127.0.0.1";
-    int port = 9980;
+    uint16_t port = 9980;
     int pos = 1;
     if(strcmp(argv[1], "-h") == 0) {
         serverIp = std::string(argv[1]);
-        port = std::stoi(argv[2]);
+        port = static_cast<uint16_t>(std::stoi(argv[2]));
 
         pos += 2;
     }
@@ -137,7 +144,7 @@ int main(int argc, char** argv) {
     std::vector<muduo::net::InetAddress> workerAddrs;
     for(int i = pos; i < argc; i += 2) {
         std::string ip = std::string(argv[i]);
-        int p = std::stoi(argv[i+1]);
+        uint16_t p = static_cast<uint16_t>(std::stoi(argv[i+1]));
         muduo::net::InetAddress addr(ip, p);
         workerAddrs.push_back(addr);
     }

@@ -43,7 +43,7 @@ class DataHandler {
 
         void sortFile();
 
-        int partition(std::vector<int64_t>& numbers, int64_t pivot, int64_t start, int64_t end);
+        int64_t partition(std::vector<int64_t>& numbers, int64_t pivot, int64_t start, int64_t end);
         std::vector<int64_t> splitFile(int64_t);
 
         muduo::net::TcpServer server;

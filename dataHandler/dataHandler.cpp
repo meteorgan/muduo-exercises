@@ -78,7 +78,7 @@ void DataHandler::onMessage(const muduo::net::TcpConnectionPtr& conn,
         }
         else if(request.find("random") == 0) {      // random
             std::ifstream ifs(filename);
-            std::vector<int> numbers;
+            std::vector<int64_t> numbers;
             int size = 100;
             int64_t n;
             while(--size >= 0 && ifs >> n)
@@ -141,14 +141,14 @@ void DataHandler::handleSort(const muduo::net::TcpConnectionPtr& conn, std::stri
     if(command == "sort") { 
         sortFile();
         stFile.open(filename + "-sort");
-        std::string number = "sort " + std::to_string(fileNumber) + "\r\n";
+        std::string number = "sort-number " + std::to_string(fileNumber) + "\r\n";
         conn->send(number);
     }
     else {       // sort-more
         int i = 0;
         std::string line = "sort";
         int64_t n;
-        while(stFile >> n && (i++ < size)) {
+        while((i++ < size) && stFile >> n) {
            line += " " + std::to_string(n);
         }
         if(stFile.eof()) {
@@ -180,7 +180,7 @@ std::pair<int64_t, double> DataHandler::computeAverage() {
     }
     infile.close();
 
-    return std::make_pair(number, double(sum) / number);
+    return std::make_pair(number, static_cast<double>(sum) / static_cast<double>(number));
 }
 
 int64_t DataHandler::computeSum() {
@@ -227,7 +227,7 @@ void DataHandler::genNumbers(int64_t number, char mode) {
                       int index = 1;
                       int64_t left = number;
                       while(left > 0) {
-                          int64_t freq = (0.1/index) * number;
+                          int64_t freq = static_cast<int64_t>((0.1/index) * static_cast<double>(number));
                           if(freq == 0)
                               freq = 1;
                           int64_t n = dis(gen);
@@ -258,7 +258,7 @@ std::vector<std::string> DataHandler::splitLargeFile(const std::string& filename
     std::ifstream infile(filename);
     int64_t n;
     while(infile >> n) {
-        int mod = n % 10;
+        int mod = static_cast<int>(n % 10);
         outfiles[mod] << n << "\n";
     }
 
@@ -355,9 +355,9 @@ void DataHandler::mergeSortedFiles(const std::vector<std::string>& files, const 
             if(!buffers[i].empty()) {
                 all_empty = false;
                 if(index == -1)
-                    index = i;
+                    index = static_cast<int>(i);
                 if(buffers[i].front() <= buffers[index].front())
-                    index = i;
+                    index = static_cast<int>(i);
             }
         }
         if(!all_empty) {
@@ -422,10 +422,10 @@ std::vector<int64_t> DataHandler::splitFile(int64_t pivot) {
     int64_t fileSize = getFileSize(file);
     if(fileSize <= fileSizeLimit) {
         std::vector<int64_t> numbers = readAllNumbers(filename);
-        int index = partition(numbers, pivot, 0, numbers.size()-1);
-        int lessNumber = index + 1;
+        int64_t index = partition(numbers, pivot, 0, numbers.size()-1);
+        int64_t lessNumber = index + 1;
         int64_t oneLess = numbers[index/2];
-        int largeNumber = numbers.size() - index - 1;
+        int64_t largeNumber = static_cast<int64_t>(numbers.size() - index - 1);
         int64_t oneLarge= numbers[index+1+largeNumber/2];
         results.push_back(lessNumber);
         results.push_back(oneLess);
@@ -473,7 +473,7 @@ std::vector<int64_t> DataHandler::splitFile(int64_t pivot) {
     return results;
 }
 
-int DataHandler::partition(std::vector<int64_t>& numbers, int64_t pivot, int64_t start, int64_t end) {
+int64_t DataHandler::partition(std::vector<int64_t>& numbers, int64_t pivot, int64_t start, int64_t end) {
     int64_t s = start;
     while(start < end) {
         while(start <= end && numbers[start] <= pivot)
@@ -494,11 +494,11 @@ int DataHandler::partition(std::vector<int64_t>& numbers, int64_t pivot, int64_t
 
 int main(int argc, char** argv) {
     std::string serverIP = "127.0.0.1";
-    int port = 9981;
+    uint16_t port = 9981;
     if(argc >= 2)
         serverIP = std::string(argv[1]);
     if(argc >= 3)
-        port = atoi(argv[2]);
+        port = static_cast<uint16_t>(atoi(argv[2]));
 
     muduo::net::EventLoop loop;
     muduo::net::InetAddress serverAddr(serverIP, port);

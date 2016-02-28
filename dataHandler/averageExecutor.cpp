@@ -16,7 +16,7 @@ double AverageExecutor::execute() {
             cond.wait(lock);
     }
 
-    return (double)sum / number;
+    return static_cast<double>(sum) / static_cast<double>(number);
 }
 
 void AverageExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,

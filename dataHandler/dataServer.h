@@ -38,7 +38,7 @@ class DataServer {
 
         std::mutex mt;
         std::condition_variable cond;
-        int size;
+        size_t size;
         muduo::net::EventLoopThread workerLoopThread;
         DataExecutor* dataExecutor;
 };

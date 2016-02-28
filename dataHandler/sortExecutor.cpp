@@ -8,7 +8,7 @@
  * 3. wait for data from all workers
  * 4. merge sorted data from all buffers
  * 5. send merged data to one workers
- * 6. request batchSize data from some workers(not finished and buffer threhold is low),
+ * 6. request batchSize data from some workers(not finished and buffer size is low),
  *    and wait for response
  * 7. return to 4
  */
@@ -19,40 +19,19 @@ void SortExecutor::execute() {
     }
 
     {
+        size_t total = notFinishedWorkers.size();
         std::unique_lock<std::mutex> lock(mt);
-        total = connections.size();
         workingSize = 0;
 
         while(workingSize < total) {
             cond.wait(lock);
         }
     }
-    int numberOneNode = number / connections.size() + 1;
+    int64_t numberOneNode = number / connections.size() + 1;
+    LOG_INFO << "there is " << number << " number totally," << " every node will has " 
+             << numberOneNode << " number or one less";
+
     while(notFinishedWorkers.size() > 0) {
-        mergeNumbers();
-        while(outputBuffer.size() >= static_cast<size_t>(batchSize)) {
-            std::string message = "sort-results";
-            for(int i = 0; i < batchSize; ++i) {
-                message += " " + outputBuffer.front();
-                outputBuffer.pop_front();
-                if(++sendNumber >= numberOneNode)
-                    break;
-            }
-            message += "\r\n";
-            std::string id = *currentOutput;
-            muduo::net::TcpConnectionPtr& conn = connections[id];
-            conn->send(message);
-            if(sendNumber >= numberOneNode) {
-                std::string end = "sort-results end\r\n";
-                conn->send(end);
-                ++currentOutput;
-                sendNumber = 0;
-                
-                // all finished
-                if(currentOutput == outputBuffer.end()) {
-                }
-            }
-        }
         size_t threhold = batchSize / 2;
         int notWorkingSize = 0;
         std::string requestMore = "sort-more " + std::to_string(batchSize) + "\r\n"; 
@@ -62,23 +41,73 @@ void SortExecutor::execute() {
                 ++notWorkingSize;
             }
         }
-
         {
+            size_t total = notFinishedWorkers.size();
             std::unique_lock<std::mutex> lock(mt);
             workingSize -= notWorkingSize;
             while(workingSize < total)
                 cond.wait(lock);
         }
+
+        mergeNumbers();
+        while(outputBuffer.size() >= static_cast<size_t>(batchSize)) {
+            std::string message = "sort-results";
+            for(int i = 0; i < batchSize; ++i) {
+                message += " " + outputBuffer.front();
+                outputBuffer.pop_front();
+                if(outputBuffer.size() == 0 || ++sendNumber >= numberOneNode)
+                    break;
+            }
+            message += "\r\n";
+            std::string id(currentOutput->first);
+            muduo::net::TcpConnectionPtr& conn = connections[id];
+            conn->send(message);
+            if(sendNumber >= numberOneNode) {
+                std::string end = "sort-results end\r\n";
+                conn->send(end);
+                ++currentOutput;
+                sendNumber = 0;
+
+                if(currentOutput == workerStatus.end())
+                    assert(outputBuffer.size() == 0);
+            }
+        }
     }
     // send data left in outputBuffer
+    size_t leftSize = outputBuffer.size();
+    if(leftSize > 0) {
+        std::string message = "sort-results";
+        while(leftSize-- > 0) {
+            message += " " + outputBuffer.front();
+            outputBuffer.pop_front();
+        }
+        message += "\r\n";
+        muduo::net::TcpConnectionPtr& conn = connections[currentOutput->first];
+        conn->send(message);
+        conn->send("sort-results end\r\n");
+    }
 }
 
 // merge numbers in all buffers, stop when there is a buffer is empty
 // or merge batchSize number
 void SortExecutor::mergeNumbers() {
     for(int i = 0; i < batchSize; ++i) {
-        std::string target = *notFinishedWorkers.begin();
-        int64_t min = std::stol(workerBuffers[target].front());
+        std::string target("");
+        int64_t min = 0;
+        for(auto& worker : notFinishedWorkers) {
+            if(workerBuffers[worker].size() == 0) {
+                assert(workerStatus[worker] == true);
+                notFinishedWorkers.erase(worker);
+            }
+            else {
+                target = worker;
+                min = std::stol(workerBuffers[target].front());
+                break;
+            }
+        }
+        if(target == "") {
+            break;
+        }
 
         for(auto& worker : notFinishedWorkers) {
                 int64_t value = std::stol(workerBuffers[worker].front());
@@ -89,8 +118,14 @@ void SortExecutor::mergeNumbers() {
         }
         outputBuffer.push_back(workerBuffers[target].front());
         workerBuffers[target].pop_front();
-        if(workerBuffers[target].size() == 0)
-            break;
+        if(workerBuffers[target].size() == 0) {
+            if(workerStatus[target]) {
+                notFinishedWorkers.erase(target);
+            }
+            else {
+                break;
+            }
+        }
     }
 }
 
@@ -120,16 +155,15 @@ void SortExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,
             }
         }
         else {
-            LOG_ERROR << "sortExecutor receive unknown reponse " << response 
+            LOG_ERROR << "sortExecutor receive unknown response " << response 
                 << " from " << id;
             conn->shutdown();
         }
 
         {
             std::unique_lock<std::mutex> lock(mt);
-            if(finished) {
-                --total;
-            }
+            if(finished)
+                workerStatus[id] = true;
             ++workingSize;
             cond.notify_all();
         }
