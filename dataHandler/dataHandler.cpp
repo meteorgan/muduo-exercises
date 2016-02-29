@@ -105,7 +105,7 @@ void DataHandler::handleGenNumber(const muduo::net::TcpConnectionPtr& conn, int6
 
 // freq <n1, freq1> <n2, freq2> ... <n, freq>\r\n
 // ...
-// freq end\r\n
+// freq <n1, freq1> <n2, freq2>... <n, freq> end\r\n
 void DataHandler::handleFreq(const muduo::net::TcpConnectionPtr& conn, int number) {
     if(!hasFreq) {
         computeFreq();
@@ -115,22 +115,18 @@ void DataHandler::handleFreq(const muduo::net::TcpConnectionPtr& conn, int numbe
         freqFile.open(filename + "-freq");
     }
 
-    const int batchSize = 100;
-    const std::string prefix("freq ");
-    while(number-- > 0 && !freqFile.eof()) {
-        std::string line(prefix);
-        int i = 0;
-        int64_t n;
-        while(++i < batchSize && freqFile >> n) {
-            line += " " + std::to_string(n);
-        }
-        line += "\r\n";
-        conn->send(line);
+    std::string line("freq");
+    int64_t n;
+    int64_t freq;
+    while(number-- > 0 && freqFile >> n >> freq) {
+        line += " " + std::to_string(n) + " " + std::to_string(freq);
     }
     if(freqFile.eof()) {
         freqFile.close();
-        conn->send(prefix + "end\r\n");
+        line += " end";
     }
+    line += "\r\n";
+    conn->send(line);
 }
 
 // sort-number <number>\r\n
@@ -276,7 +272,7 @@ void DataHandler::computeFreq(const std::string& input_file, const std::string& 
         freqs[n]++;
     }
 
-    std::ofstream ofs(output_file, std::ostream::out|std::ofstream::app);
+    std::ofstream ofs(output_file, std::ostream::out|std::ofstream::trunc);
     for(const auto &pair :  freqs) {
         ofs << pair.first << " " << pair.second << "\n";
     } 
@@ -286,8 +282,7 @@ void DataHandler::computeFreq(const std::string& input_file, const std::string& 
 void DataHandler::computeFreq() {
     int64_t fileSize = getFileSize(filename);
     if(fileSize < fileSizeLimit) {
-        std::string name_str = std::string(filename);
-        computeFreq(name_str, name_str + "-freq");
+        computeFreq(filename, filename + "-freq");
     }
     else {
         // data may be too much, can not store freqs in memory
