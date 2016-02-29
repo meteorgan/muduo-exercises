@@ -202,7 +202,7 @@ int64_t DataHandler::getFileSize(const std::string filename) {
 }
 
 void DataHandler::genNumbers(int64_t number, char mode) {
-    std::ofstream ofs(filename, std::ofstream::out);
+    std::ofstream ofs(filename, std::ofstream::out|std::ofstream::trunc);
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -341,7 +341,7 @@ void DataHandler::mergeSortedFiles(const std::vector<std::string>& files, const 
             empty[i] = true;
     }
 
-    std::ofstream ofs(output);
+    std::ofstream ofs(output, std::ofstream::out|std::ofstream::trunc);
     bool all_empty = false;
     while(!all_empty) {
         int index = -1;
@@ -375,7 +375,7 @@ void DataHandler::sortFile(const std::string input, const std::string output) {
     std::vector<int64_t> numbers = readAllNumbers(input);
     std::sort(numbers.begin(), numbers.end());
 
-    std::ofstream ofs(output, std::ostream::out|std::ostream::app);
+    std::ofstream ofs(output, std::ostream::out|std::ostream::trunc);
     for(auto n : numbers)
         ofs << n << "\n";
 }

@@ -55,7 +55,7 @@ void SortExecutor::execute() {
             for(int i = 0; i < batchSize; ++i) {
                 message += " " + outputBuffer.front();
                 outputBuffer.pop_front();
-                if(outputBuffer.size() == 0 || ++sendNumber >= numberOneNode)
+                if(++sendNumber >= numberOneNode)
                     break;
             }
             message += "\r\n";
