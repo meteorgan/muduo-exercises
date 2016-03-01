@@ -11,23 +11,85 @@ std::vector<std::pair<int64_t, int64_t>> FreqExecutor::execute() {
         for(const auto& worker : notFinishedWorkers) {
             if(workerBuffers[worker].size() < threhold) {
                 connections[worker]->send(request);
-                --notWorkingSize;
+                --workingSize;
             }
         }
         {
             size_t total = notFinishedWorkers.size();
             std::unique_lock<std::mutex> lock(mt);
-            while(notWorkingSize < total)
+            while(workingSize < total)
                 cond.wait(lock);
         }
 
         mergeFreqs();
     }
+    while(topFreqs.size() > 0) {
+        const std::pair<int64_t, int64_t>& pair = topFreqs.top();
+        freqs.push_back(std::make_pair(pair.second, pair.first));
+        topFreqs.pop();
+    }
+
+    auto comp = [](std::pair<int64_t, int64_t>& e1, std::pair<int64_t, int64_t>& e2) { 
+        return e1.second > e2.second; };
+    std::sort(freqs.begin(), freqs.end(), comp);
 
     return freqs;
 }
 
 void FreqExecutor::mergeFreqs() {
+    while(true) {
+        int64_t n = 0;
+        int64_t freq = 0;
+        std::vector<std::string> targets;
+        for(auto& worker : notFinishedWorkers) {
+            if(workerBuffers[worker].size() == 0) {
+                notFinishedWorkers.erase(worker);
+            }
+            else {
+                targets.push_back(worker);
+                n = workerBuffers[worker].front().first;
+                freq = workerBuffers[worker].front().second;
+                break;
+            }
+        }
+        if(targets.size() == 0)
+            break;
+        
+        for(auto& worker : notFinishedWorkers) {
+            if(worker != targets[0]) {
+                std::list<std::pair<int64_t, int64_t>>& values = workerBuffers[worker];
+                if(values.front().first < n) {
+                    targets.clear();
+                    targets.push_back(worker);
+                    n = values.front().first;
+                    freq = values.front().second;
+                }
+                else if(values.front().first == n) {
+                    targets.push_back(worker);
+                    freq += values.front().second;
+                }
+            }
+        }
+        if((topFreqs.size() == 0) 
+                || (topFreqs.top().first < freq) 
+                || (topFreqs.top().first == freq && topFreqs.top().second > n)) {
+            topFreqs.pop();
+            topFreqs.push(std::make_pair(freq, n));
+        }
+
+        bool can_break = false;
+        for(auto& t : targets) {
+            workerBuffers[t].pop_back();
+            if(workerBuffers[t].size() == 0) {
+                can_break =  true;
+                if(workerStatus[t]) {
+                    notFinishedWorkers.erase(t);
+                }
+            }
+        }
+        if(can_break)
+            break;
+    }
 }
 
 void FreqExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,
@@ -60,7 +122,8 @@ void FreqExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,
             std::unique_lock<std::mutex> lock(mt);
             if(finished)
                 workerStatus[peer] = true;
-            ++notWorkingSize;
+            ++workingSize;
+            cond.notify_all();
         }
     }
 }

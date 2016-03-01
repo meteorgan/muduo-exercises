@@ -13,7 +13,7 @@
 class FreqExecutor : public DataExecutor {
     public:
         FreqExecutor(std::map<std::string, muduo::net::TcpConnectionPtr>& conns)
-            : DataExecutor(conns), notWorkingSize(0) {
+            : DataExecutor(conns), workingSize(0) {
                 for(auto& conn : conns) {
                     std::string id(conn.first);
                     workerBuffers[id] = std::list<std::pair<int64_t, int64_t>>();
@@ -29,10 +29,10 @@ class FreqExecutor : public DataExecutor {
     private:
         void mergeFreqs();
 
-        size_t notWorkingSize;
+        size_t workingSize;
         std::priority_queue<std::pair<int64_t, int64_t>, 
                             std::vector<std::pair<int64_t, int64_t>>, 
-                            std::greater<std::pair<int64_t, int64_t>>> topFreq;
+                            std::greater<std::pair<int64_t, int64_t>>> topFreqs;
         const int batchSize = 1024;
         std::map<std::string, std::list<std::pair<int64_t, int64_t>>> workerBuffers;
         std::set<std::string> notFinishedWorkers;
