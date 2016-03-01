@@ -10,7 +10,7 @@ const std::function<bool(std::pair<int64_t, int64_t>&, std::pair<int64_t, int64_
 std::vector<std::pair<int64_t, int64_t>> FreqExecutor::execute(size_t freqNumber) {
     std::vector<std::pair<int64_t, int64_t>> freqs;
 
-    std::string request = "sort " + std::to_string(batchSize);
+    std::string request = "freq " + std::to_string(batchSize) + "\r\n";
     size_t threhold = batchSize / 2;
     while(notFinishedWorkers.size() != 0) {
         for(const auto& worker : notFinishedWorkers) {
@@ -77,6 +77,7 @@ void FreqExecutor::mergeFreqs(size_t freqNumber) {
             }
         }
 
+        LOG_INFO << "there is " << topFreqs.size() << " elements in priority queue";
         if(topFreqs.size() < freqNumber) {
             topFreqs.push(std::make_pair(freq, n));
         }
@@ -116,7 +117,7 @@ void FreqExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,
             if(tokens[tokens.size()-1] == "end") {
                 finished = true; 
             }
-            for(size_t i = 1; i < tokens.size(); i+=2) {
+            for(size_t i = 1; i < tokens.size()-1; i+=2) {
                 int64_t n = std::stol(tokens[i]);
                 int64_t freq = std::stol(tokens[i+1]);
                 workerBuffers[peer].push_back(std::make_pair(n, freq));

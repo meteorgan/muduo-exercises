@@ -13,7 +13,7 @@
 class FreqExecutor : public DataExecutor {
     public:
         FreqExecutor(std::map<std::string, muduo::net::TcpConnectionPtr>& conns)
-            : DataExecutor(conns), workingSize(0) {
+            : DataExecutor(conns), workingSize(connections.size()), topFreqs(compFreq) {
                 for(auto& conn : conns) {
                     std::string id(conn.first);
                     workerBuffers[id] = std::list<std::pair<int64_t, int64_t>>();

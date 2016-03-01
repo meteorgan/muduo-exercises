@@ -98,6 +98,7 @@ void DataServer::onClientMessage(const muduo::net::TcpConnectionPtr& conn,
             FreqExecutor executor(connections);
             dataExecutor = &executor;
             std::vector<std::pair<int64_t, int64_t>> freqs = executor.execute(freqNumber);
+
             std::string response = "freqs:";
             for(auto& freq : freqs) {
                 response += " " + std::to_string(freq.first) + " " + std::to_string(freq.second);

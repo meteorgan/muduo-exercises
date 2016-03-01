@@ -15,7 +15,7 @@ int64_t MedianExecutor::execute() {
         while(workingSize < total)
             cond.wait(lock);
     }
-    int totalNumber = 0;
+    int64_t totalNumber = 0;
     std::vector<int64_t> randomValues;
     for(auto& worker : workerBuffers) {
         assert(worker.second.size() == 2);
