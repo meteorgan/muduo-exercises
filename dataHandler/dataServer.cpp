@@ -77,14 +77,14 @@ void DataServer::onClientMessage(const muduo::net::TcpConnectionPtr& conn,
             dataExecutor = &executor;
             double average = executor.execute();
 
-            conn->send(std::to_string(average) + "\r\n");
+            conn->send("average: " + std::to_string(average) + "\r\n");
         }
         else if(command == "median") {
             MedianExecutor executor(connections);
             dataExecutor = &executor;
             int64_t median = executor.execute();
 
-            conn->send(std::to_string(median) + "\r\n");
+            conn->send("median: " + std::to_string(median) + "\r\n");
         }
         else if(command == "sort") {
             SortExecutor executor(connections);
@@ -98,7 +98,7 @@ void DataServer::onClientMessage(const muduo::net::TcpConnectionPtr& conn,
             FreqExecutor executor(connections);
             dataExecutor = &executor;
             std::vector<std::pair<int64_t, int64_t>> freqs = executor.execute(freqNumber);
-            std::string response = "";
+            std::string response = "freqs:";
             for(auto& freq : freqs) {
                 response += " " + std::to_string(freq.first) + " " + std::to_string(freq.second);
             }
