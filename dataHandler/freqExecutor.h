@@ -24,7 +24,7 @@ class FreqExecutor : public DataExecutor {
 
         std::vector<std::pair<int64_t, int64_t>> execute(size_t freqNumber);
 
-        void onMessage(const muduo::net::TcpConnectionPtr& conn,
+        virtual void onMessage(const muduo::net::TcpConnectionPtr& conn,
                 muduo::net::Buffer* buf, muduo::Timestamp time);
     private:
         void mergeFreqs(size_t freqNumber);

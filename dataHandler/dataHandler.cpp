@@ -73,8 +73,17 @@ void DataHandler::onMessage(const muduo::net::TcpConnectionPtr& conn,
             handleFreq(conn, number);
         }
         else if(request.find("split") == 0) {       // split <number>
-            int64_t number = std::stol(tokens[1]);
-            handleSplit(conn, number);
+            if(tokens[1] == "end") {
+                std::remove(lessFile.c_str());
+                std::remove(largeFile.c_str());
+                lessFile = "";
+                largeFile = "";
+                lastPivot = 0;
+            }
+            else {
+                int64_t number = std::stol(tokens[1]);
+                handleSplit(conn, number);
+            }
         }
         else if(request.find("random") == 0) {      // random
             std::ifstream ifs(filename);
@@ -85,7 +94,8 @@ void DataHandler::onMessage(const muduo::net::TcpConnectionPtr& conn,
                 numbers.push_back(n);
             std::sort(numbers.begin(), numbers.end());
             int64_t target = numbers[numbers.size()/2]; 
-            std::string line = "random " + std::to_string(target) + "\r\n";
+            std::string line = "random " + std::to_string(target) 
+                + " " + std::to_string(fileNumber) + "\r\n";
             conn->send(line);
         }
         else {
@@ -404,9 +414,9 @@ void DataHandler::sortFile() {
 void DataHandler::handleSplit(const muduo::net::TcpConnectionPtr& conn, int64_t number) {
     std::vector<int64_t> numbers = splitFile(number);
     std::string data("");
-    for(auto &n : numbers)
+    for(auto& n : numbers)
         data += " " + std::to_string(n);
-    conn->send("split " + data + "\r\n");
+    conn->send("split" + data + "\r\n");
 }
 
 // remove all temp files
@@ -414,55 +424,46 @@ std::vector<int64_t> DataHandler::splitFile(int64_t pivot) {
     std::vector<int64_t> results;
 
     std::string file = (lessFile != "") ? (lastPivot > pivot ? lessFile : largeFile) : filename;
-    int64_t fileSize = getFileSize(file);
-    if(fileSize <= fileSizeLimit) {
-        std::vector<int64_t> numbers = readAllNumbers(filename);
-        int64_t index = partition(numbers, pivot, 0, numbers.size()-1);
-        int64_t lessNumber = index + 1;
-        int64_t oneLess = numbers[index/2];
-        int64_t largeNumber = static_cast<int64_t>(numbers.size() - index - 1);
-        int64_t oneLarge= numbers[index+1+largeNumber/2];
-        results.push_back(lessNumber);
-        results.push_back(oneLess);
-        results.push_back(largeNumber);
-        results.push_back(oneLarge);
-    }
-    else {
-        std::string prefix = filename + "-" + std::to_string(pivot) + "-";
-        std::string newLessFile = prefix + "-less";
-        std::string newLargeFile = prefix + "-large";
-        std::ifstream ifs(file);
-        std::ofstream less(newLessFile);
-        std::ofstream large(newLargeFile);
-        int64_t lessNumber = 0;
-        int64_t oneLess = 0;
-        int64_t largeNumber = 0;
-        int64_t oneLarge = 0;
-        int64_t n;
-        while(ifs >> n) {
-            if(n <= pivot) {
+    std::string prefix = filename + "-" + std::to_string(pivot);
+    std::string newLessFile = prefix + "-less";
+    std::string newLargeFile = prefix + "-large";
+    std::ifstream ifs(file);
+    std::ofstream less(newLessFile);
+    std::ofstream large(newLargeFile);
+    int64_t lessNumber = 0;
+    int64_t oneLess = 0;
+    int64_t largeNumber = 0;
+    int64_t oneLarge = 0;
+    int64_t n;
+    bool removeOne = false;
+    while(ifs >> n) {
+        if(n <= pivot) {
+            if(removeOne || n != pivot)
                 less << n << "\n";
-                ++lessNumber;
+            else
+                removeOne = true;
+            ++lessNumber;
+            if(n != pivot)
                 oneLess = n;
-            }
-            else  {
-                large << n << "\n";
-                ++largeNumber;
-                oneLarge = n;
-            }
         }
-        results.push_back(lessNumber);
-        results.push_back(oneLess);
-        results.push_back(largeNumber);
-        results.push_back(oneLarge);
-
-        if(file != filename) {
-            std::remove(lessFile.c_str());
-            std::remove(largeFile.c_str());
+        else  {
+            large << n << "\n";
+            ++largeNumber;
+            oneLarge = n;
         }
-        lessFile = newLessFile;
-        largeFile = newLargeFile;
     }
+    results.push_back(lessNumber);
+    results.push_back(oneLess);
+    results.push_back(largeNumber);
+    results.push_back(oneLarge);
+
+    if(file != filename) {
+        std::remove(lessFile.c_str());
+        std::remove(largeFile.c_str());
+    }
+    lessFile = newLessFile;
+    largeFile = newLargeFile;
+
     lastPivot = pivot;
 
     return results;
