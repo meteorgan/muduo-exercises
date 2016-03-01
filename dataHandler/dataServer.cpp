@@ -2,6 +2,7 @@
 #include "genNumberExecutor.h"
 #include "averageExecutor.h"
 #include "sortExecutor.h"
+#include "freqExecutor.h"
 
 #include "muduo/base/Logging.h"
 
@@ -87,6 +88,16 @@ void DataServer::onClientMessage(const muduo::net::TcpConnectionPtr& conn,
             conn->send("OK\r\n");
         }
         else if(command.find("freq") == 0) {
+            size_t freqNumber = std::stoi(tokens[1]);
+            FreqExecutor executor(connections);
+            dataExecutor = &executor;
+            std::vector<std::pair<int64_t, int64_t>> freqs = executor.execute(freqNumber);
+            std::string response = "";
+            for(auto& freq : freqs) {
+                response += " " + std::to_string(freq.first) + " " + std::to_string(freq.second);
+            }
+            response += "\r\n";
+            conn->send(response);
         }
         else {
             LOG_ERROR << "receive unknown command [" << command << "] from " 

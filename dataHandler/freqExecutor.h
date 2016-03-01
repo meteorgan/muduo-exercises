@@ -22,17 +22,18 @@ class FreqExecutor : public DataExecutor {
                 }
             }
 
-        std::vector<std::pair<int64_t, int64_t>> execute();
+        std::vector<std::pair<int64_t, int64_t>> execute(size_t freqNumber);
 
         void onMessage(const muduo::net::TcpConnectionPtr& conn,
                 muduo::net::Buffer* buf, muduo::Timestamp time);
     private:
-        void mergeFreqs();
+        void mergeFreqs(size_t freqNumber);
 
         size_t workingSize;
+        static const std::function<bool(std::pair<int64_t, int64_t>&, std::pair<int64_t, int64_t>&)>compFreq;
         std::priority_queue<std::pair<int64_t, int64_t>, 
                             std::vector<std::pair<int64_t, int64_t>>, 
-                            std::greater<std::pair<int64_t, int64_t>>> topFreqs;
+                            decltype(compFreq)> topFreqs;
         const int batchSize = 1024;
         std::map<std::string, std::list<std::pair<int64_t, int64_t>>> workerBuffers;
         std::set<std::string> notFinishedWorkers;

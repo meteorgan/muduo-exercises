@@ -2,7 +2,12 @@
 
 #include <boost/algorithm/string.hpp>
 
-std::vector<std::pair<int64_t, int64_t>> FreqExecutor::execute() {
+const std::function<bool(std::pair<int64_t, int64_t>&, std::pair<int64_t, int64_t>&)> FreqExecutor::compFreq = 
+    [](std::pair<int64_t, int64_t>& e1, std::pair<int64_t, int64_t>& e2) {
+        return e1.first > e2.first || (e1.first == e2.first && e1.second < e2.second);
+    };
+
+std::vector<std::pair<int64_t, int64_t>> FreqExecutor::execute(size_t freqNumber) {
     std::vector<std::pair<int64_t, int64_t>> freqs;
 
     std::string request = "sort " + std::to_string(batchSize);
@@ -21,7 +26,7 @@ std::vector<std::pair<int64_t, int64_t>> FreqExecutor::execute() {
                 cond.wait(lock);
         }
 
-        mergeFreqs();
+        mergeFreqs(freqNumber);
     }
     while(topFreqs.size() > 0) {
         const std::pair<int64_t, int64_t>& pair = topFreqs.top();
@@ -30,13 +35,14 @@ std::vector<std::pair<int64_t, int64_t>> FreqExecutor::execute() {
     }
 
     auto comp = [](std::pair<int64_t, int64_t>& e1, std::pair<int64_t, int64_t>& e2) { 
-        return e1.second > e2.second; };
+        return (e1.second > e2.second) || (e1.second == e2.second && e1.first < e2.first); 
+    };
     std::sort(freqs.begin(), freqs.end(), comp);
 
     return freqs;
 }
 
-void FreqExecutor::mergeFreqs() {
+void FreqExecutor::mergeFreqs(size_t freqNumber) {
     while(true) {
         int64_t n = 0;
         int64_t freq = 0;
@@ -70,8 +76,11 @@ void FreqExecutor::mergeFreqs() {
                 }
             }
         }
-        if((topFreqs.size() == 0) 
-                || (topFreqs.top().first < freq) 
+
+        if(topFreqs.size() < freqNumber) {
+            topFreqs.push(std::make_pair(freq, n));
+        }
+        else if((topFreqs.top().first < freq) 
                 || (topFreqs.top().first == freq && topFreqs.top().second > n)) {
             topFreqs.pop();
             topFreqs.push(std::make_pair(freq, n));
@@ -79,7 +88,7 @@ void FreqExecutor::mergeFreqs() {
 
         bool can_break = false;
         for(auto& t : targets) {
-            workerBuffers[t].pop_back();
+            workerBuffers[t].pop_front();
             if(workerBuffers[t].size() == 0) {
                 can_break =  true;
                 if(workerStatus[t]) {
@@ -101,7 +110,7 @@ void FreqExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,
 
         std::string peer(conn->peerAddress().toIpPort().c_str());
         std::vector<std::string> tokens;
-        boost::split(response, tokens, boost::is_any_of(" "));
+        boost::split(tokens, response, boost::is_any_of(" "));
         bool finished = false;
         if(tokens[0] == "freq") {
             if(tokens[tokens.size()-1] == "end") {
