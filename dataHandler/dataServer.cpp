@@ -2,6 +2,7 @@
 #include "genNumberExecutor.h"
 #include "averageExecutor.h"
 #include "sortExecutor.h"
+#include "medianExecutor.h"
 
 #include "muduo/base/Logging.h"
 
@@ -52,7 +53,7 @@ void DataServer::onClientConnection(const muduo::net::TcpConnectionPtr& conn) {
 // 2. average       response: number<double>
 // 3. median        response: number<int64_t>
 // 4. sort          response: ok
-// 5. freq n        response: n1 n2 ... n
+// 5. freq n        response: <n1, freq1> <n2, freq2> ... <n, freq>
 void DataServer::onClientMessage(const muduo::net::TcpConnectionPtr& conn,
         muduo::net::Buffer* buf, muduo::Timestamp time) {
     while(buf->findCRLF()) {
@@ -78,6 +79,11 @@ void DataServer::onClientMessage(const muduo::net::TcpConnectionPtr& conn,
             conn->send(std::to_string(average) + "\r\n");
         }
         else if(command == "median") {
+            MedianExecutor executor(connections);
+            dataExecutor = &executor;
+            int64_t median = executor.execute();
+
+            conn->send(std::to_string(median) + "\r\n");
         }
         else if(command == "sort") {
             SortExecutor executor(connections);
