@@ -13,7 +13,7 @@
 
 DataHandler::DataHandler(muduo::net::EventLoop* loop, muduo::net::InetAddress& serverAddr)
     : server(loop, serverAddr, "dataHandler"), filename(""), fileNumber(0),
-    sorted(false), hasFreq(false), lastPivot(0), lessFile(""), largeFile("") {
+    sorted(false), hasFreq(false), lastPivot(0), splitTimes(0), lessFile(""), largeFile("") {
     server.setConnectionCallback(boost::bind(&DataHandler::onConnection, this, _1));
     server.setMessageCallback(boost::bind(&DataHandler::onMessage, this, _1, _2, _3));
 }
@@ -79,13 +79,26 @@ void DataHandler::onMessage(const muduo::net::TcpConnectionPtr& conn,
                 lessFile = "";
                 largeFile = "";
                 lastPivot = 0;
+                splitTimes = 0;
             }
             else {
                 int64_t number = std::stol(tokens[1]);
+                ++splitTimes;
                 handleSplit(conn, number);
             }
         }
         else if(request.find("random") == 0) {      // random
+            if(lessFile != "") {
+                std::remove(lessFile.c_str());
+                lessFile = "";
+            }
+            if(largeFile != "") {
+                std::remove(largeFile.c_str());
+                largeFile = "";
+            }
+            lastPivot = 0;
+            splitTimes = 0;
+
             std::ifstream ifs(filename);
             std::vector<int64_t> numbers;
             int size = 100;
@@ -120,6 +133,8 @@ void DataHandler::handleFreq(const muduo::net::TcpConnectionPtr& conn, int numbe
     if(!hasFreq) {
         computeFreq();
         hasFreq = true;
+
+        LOG_INFO << conn->localAddress().toIpPort() << " compute freq finished";
     }
     if(!freqFile.is_open()) {
         freqFile.open(filename + "-freq");
@@ -252,23 +267,23 @@ void DataHandler::genNumbers(int64_t number, char mode) {
 }
 
 std::vector<std::string> DataHandler::splitLargeFile(const std::string& filename) {
-    std::string name(filename);
+    std::string prefix(filename + "-");
     std::vector<std::string> files;
     std::ofstream outfiles[10];
     for(int i = 0; i < 10; ++i) {
-        std::string n =  name + std::to_string(i);
-        files.push_back(n);
-        outfiles[i].open(n);
+        std::string name = prefix + std::to_string(i);
+        files.push_back(name);
+        outfiles[i].open(name);
     }
 
     std::ifstream infile(filename);
     int64_t n;
     while(infile >> n) {
-        int mod = static_cast<int>(n % 10);
+        int mod = abs(static_cast<int>(n % 10));
         outfiles[mod] << n << "\n";
     }
 
-    for(int i = 0;i < 10; ++i)
+    for(int i = 0; i < 10; ++i)
         outfiles[i].close();
 
     return files;
@@ -423,30 +438,33 @@ void DataHandler::handleSplit(const muduo::net::TcpConnectionPtr& conn, int64_t 
 std::vector<int64_t> DataHandler::splitFile(int64_t pivot) {
     std::vector<int64_t> results;
 
-    std::string file = (lessFile != "") ? (lastPivot > pivot ? lessFile : largeFile) : filename;
-    std::string prefix = filename + "-" + std::to_string(pivot);
+    std::string file = (lessFile != "") ? (lastPivot >= pivot ? lessFile : largeFile) : filename;
+    std::string prefix = filename + "-" + std::to_string(splitTimes) + "-" + std::to_string(pivot);
     std::string newLessFile = prefix + "-less";
     std::string newLargeFile = prefix + "-large";
     std::ifstream ifs(file);
     std::ofstream less(newLessFile);
     std::ofstream large(newLargeFile);
     int64_t lessNumber = 0;
-    int64_t oneLess = 0;
+    int64_t oneLess = pivot;
     int64_t largeNumber = 0;
-    int64_t oneLarge = 0;
+    int64_t oneLarge = pivot;
     int64_t n;
     bool removeOne = false;
     while(ifs >> n) {
         if(n <= pivot) {
-            if(removeOne || n != pivot)
+            if(removeOne || n != pivot) {
                 less << n << "\n";
-            else
+            }
+            else {
                 removeOne = true;
+            }
             ++lessNumber;
-            if(n != pivot)
+            if(n != pivot) {
                 oneLess = n;
+            }
         }
-        else  {
+        else{
             large << n << "\n";
             ++largeNumber;
             oneLarge = n;

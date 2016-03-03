@@ -14,14 +14,14 @@ std::vector<std::pair<int64_t, int64_t>> FreqExecutor::execute(size_t freqNumber
     size_t threhold = batchSize / 2;
     while(notFinishedWorkers.size() != 0) {
         for(const auto& worker : notFinishedWorkers) {
-            if(workerBuffers[worker].size() < threhold) {
+            if(!workerStatus[worker] && workerBuffers[worker].size() < threhold) {
                 connections[worker]->send(request);
                 --workingSize;
             }
         }
         {
-            size_t total = notFinishedWorkers.size();
             std::unique_lock<std::mutex> lock(mt);
+            size_t total = notFinishedWorkers.size();
             while(workingSize < total)
                 cond.wait(lock);
         }
@@ -49,6 +49,7 @@ void FreqExecutor::mergeFreqs(size_t freqNumber) {
         std::vector<std::string> targets;
         for(auto& worker : notFinishedWorkers) {
             if(workerBuffers[worker].size() == 0) {
+                assert(workerStatus[worker] == true);
                 notFinishedWorkers.erase(worker);
             }
             else {
@@ -77,7 +78,6 @@ void FreqExecutor::mergeFreqs(size_t freqNumber) {
             }
         }
 
-        LOG_INFO << "there is " << topFreqs.size() << " elements in priority queue";
         if(topFreqs.size() < freqNumber) {
             topFreqs.push(std::make_pair(freq, n));
         }
@@ -130,8 +130,10 @@ void FreqExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,
 
         {
             std::unique_lock<std::mutex> lock(mt);
-            if(finished)
+            if(finished) {
                 workerStatus[peer] = true;
+                LOG_INFO << "data handler: " << peer << " is finished";
+            }
             ++workingSize;
             cond.notify_all();
         }

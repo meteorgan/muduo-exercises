@@ -26,7 +26,10 @@ int64_t MedianExecutor::execute() {
     }
     std::sort(randomValues.begin(), randomValues.end());
     int64_t splitPoint = randomValues[randomValues.size()/2];
-    int64_t size = totalNumber / 2 + 1;
+    int64_t size = totalNumber / 2;
+    if(totalNumber % 2 != 0) {
+        size += 1;
+    }
     while(true) {
         std::string request = "split " + std::to_string(splitPoint) + "\r\n";
         for(auto& conn : connections) {
@@ -73,6 +76,7 @@ int64_t MedianExecutor::execute() {
             std::sort(moreNumbers.begin(), moreNumbers.end());
             splitPoint = moreNumbers[moreNumbers.size()/2];
         }
+        LOG_INFO << "size: " << size << ", splitPoint: " << splitPoint;
     }
 
     for(auto& conn : connections)
@@ -89,8 +93,7 @@ void MedianExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,
         buffer->retrieveUntil(crlf+2);
 
         std::string id(conn->peerAddress().toIpPort().c_str());
-        LOG_INFO <<  "MedianExecutor receive: [" << response << "] from " << id;
-
+        LOG_INFO << "MedianExecutor receive: [" << response << "] from " << id;
         std::vector<std::string> tokens;
         boost::split(tokens, response, boost::is_any_of(" "));
         if(tokens[0] == "random" || tokens[0] == "split") {

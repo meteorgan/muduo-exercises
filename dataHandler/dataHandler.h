@@ -52,6 +52,7 @@ class DataHandler {
         bool sorted;
         bool hasFreq;
         int64_t lastPivot;
+        int64_t splitTimes;
         std::string lessFile;
         std::string largeFile;
         std::ifstream freqFile;

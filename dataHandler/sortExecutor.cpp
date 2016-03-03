@@ -31,19 +31,19 @@ void SortExecutor::execute() {
     LOG_INFO << "there is " << number << " number totally," << " every node will has " 
              << numberOneNode << " number or one less";
 
+    size_t threhold = batchSize / 2;
     while(notFinishedWorkers.size() > 0) {
-        size_t threhold = batchSize / 2;
         int notWorkingSize = 0;
         std::string requestMore = "sort-more " + std::to_string(batchSize) + "\r\n"; 
         for(auto& worker : notFinishedWorkers) {
-            if(workerBuffers[worker].size() < threhold) {
+            if(!workerStatus[worker] && workerBuffers[worker].size() < threhold) {
                 connections[worker]->send(requestMore);
                 ++notWorkingSize;
             }
         }
         {
-            size_t total = notFinishedWorkers.size();
             std::unique_lock<std::mutex> lock(mt);
+            size_t total = notFinishedWorkers.size();
             workingSize -= notWorkingSize;
             while(workingSize < total)
                 cond.wait(lock);

@@ -37,8 +37,8 @@ void DataServer::start() {
     }
 
     {
-        size = workers.size();
         std::unique_lock<std::mutex> lock(mt);
+        size = workers.size();
         while(size > 0)
             cond.wait(lock);
     }
@@ -64,13 +64,18 @@ void DataServer::onClientMessage(const muduo::net::TcpConnectionPtr& conn,
         std::vector<std::string> tokens;
         boost::split(tokens, command, boost::is_any_of(" "));
         if(command.find("genNumber") == 0) {
-            GenNumberExecutor executor(connections);        
-            dataExecutor = &executor;
-            int64_t number = std::stol(tokens[1]);
-            char mode = tokens[2][0];
-            executor.execute(number, mode);
+            if(tokens.size() == 3) {
+                GenNumberExecutor executor(connections);        
+                dataExecutor = &executor;
+                int64_t number = std::stol(tokens[1]);
+                char mode = tokens[2][0];
+                executor.execute(number, mode);
 
-            conn->send("OK\r\n");
+                conn->send("OK\r\n");
+            }
+            else {
+                conn->send("usage: genNumber [n] [n/u/z]\r\n");
+            }
         }
         else if(command == "average") {
             AverageExecutor executor(connections);
