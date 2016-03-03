@@ -34,7 +34,7 @@ std::vector<std::pair<int64_t, int64_t>> FreqExecutor::execute(size_t freqNumber
         topFreqs.pop();
     }
 
-    auto comp = [](std::pair<int64_t, int64_t>& e1, std::pair<int64_t, int64_t>& e2) { 
+    auto comp = [](const std::pair<int64_t, int64_t>& e1, const std::pair<int64_t, int64_t>& e2) { 
         return (e1.second > e2.second) || (e1.second == e2.second && e1.first < e2.first); 
     };
     std::sort(freqs.begin(), freqs.end(), comp);
