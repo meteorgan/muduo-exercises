@@ -26,12 +26,12 @@ void AverageExecutor::onMessage(const muduo::net::TcpConnectionPtr& conn,
         std::string response(buf->peek(), crlf);
         buf->retrieveUntil(crlf + 2);
 
+        LOG_INFO << "AverageExecutor receive: [" << response << "] from " << conn->peerAddress().toIpPort();
         std::vector<std::string> tokens;
         boost::split(tokens, response, boost::is_any_of(" "));
         if(tokens[0] == "average") {
             number += std::stol(tokens[1]);
             sum += std::stol(tokens[2]);
-            LOG_INFO << "receive average " << response << " from " << conn->peerAddress().toIpPort();
 
             {
                 std::unique_lock<std::mutex> lock(mt);

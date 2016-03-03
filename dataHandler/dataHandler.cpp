@@ -450,15 +450,9 @@ std::vector<int64_t> DataHandler::splitFile(int64_t pivot) {
     int64_t largeNumber = 0;
     int64_t oneLarge = pivot;
     int64_t n;
-    bool removeOne = false;
     while(ifs >> n) {
         if(n <= pivot) {
-            if(removeOne || n != pivot) {
-                less << n << "\n";
-            }
-            else {
-                removeOne = true;
-            }
+            less << n << "\n";
             ++lessNumber;
             if(n != pivot) {
                 oneLess = n;

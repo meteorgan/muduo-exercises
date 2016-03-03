@@ -2,6 +2,8 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include <set>
+
 int64_t MedianExecutor::execute() {
     int64_t median = 0;
     std::string random = "random\r\n";
@@ -26,11 +28,10 @@ int64_t MedianExecutor::execute() {
     }
     std::sort(randomValues.begin(), randomValues.end());
     int64_t splitPoint = randomValues[randomValues.size()/2];
-    int64_t size = totalNumber / 2;
-    if(totalNumber % 2 != 0) {
-        size += 1;
-    }
+    int64_t size = totalNumber / 2 + 1;
     while(true) {
+        LOG_INFO << "size: " << size << ", splitPoint: " << splitPoint;
+
         std::string request = "split " + std::to_string(splitPoint) + "\r\n";
         for(auto& conn : connections) {
             conn.second->send(request);
@@ -45,7 +46,7 @@ int64_t MedianExecutor::execute() {
         
         int64_t moreCount= 0;
         int64_t lessOrEqualCount = 0;
-        std::vector<int64_t> lessOrEqualNumbers;
+        std::set<int64_t> lessOrEqualNumbers;
         std::vector<int64_t> moreNumbers;
         for(auto& worker : workerBuffers) {
             std::vector<int64_t>& values = worker.second;
@@ -53,7 +54,7 @@ int64_t MedianExecutor::execute() {
 
             int64_t lessOrEqual = values[0];
             if(lessOrEqual > 0) {
-                lessOrEqualNumbers.push_back(values[1]);
+                lessOrEqualNumbers.insert(values[1]);
                 lessOrEqualCount += lessOrEqual;
             }
             int64_t more = values[2];
@@ -68,15 +69,24 @@ int64_t MedianExecutor::execute() {
             break;
         }
         else if(lessOrEqualCount > size) {
-            std::sort(lessOrEqualNumbers.begin(), lessOrEqualNumbers.end());
-            splitPoint = lessOrEqualNumbers[lessOrEqualNumbers.size()/2];
+            size_t len = lessOrEqualNumbers.size();
+            if(len == 1 && *(lessOrEqualNumbers.begin()) == splitPoint) {
+                median = splitPoint;
+                break;
+            }
+            lessOrEqualNumbers.erase(splitPoint);
+            size_t newLen = lessOrEqualNumbers.size();
+            std::set<int64_t>::iterator iter = lessOrEqualNumbers.begin();
+            size_t i = 0;
+            while(i++ < newLen/2)
+                ++iter;
+            splitPoint = *iter;
         }
         else {
             size -= lessOrEqualCount;
             std::sort(moreNumbers.begin(), moreNumbers.end());
             splitPoint = moreNumbers[moreNumbers.size()/2];
         }
-        LOG_INFO << "size: " << size << ", splitPoint: " << splitPoint;
     }
 
     for(auto& conn : connections)
