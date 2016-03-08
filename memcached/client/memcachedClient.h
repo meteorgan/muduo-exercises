@@ -1,14 +1,15 @@
 #ifndef MEMCACHED_CLIENT_H
 #define MEMCACHED_CLIENT_H
 
-#include "muduo/net/TcpClient.h"
-
 #include <iostream>
 #include <vector>
 
 class MemcachedClient {
     public:
-        MemcachedClient(std::string serverIP, uint16_t port);
+        MemcachedClient(std::string serverIP, uint16_t port)
+            : serverIP(serverIP), port(port), fd(0) {}
+
+        void connect();
 
         void set(std::string key, std::string value, uint32_t expire = 0);
 
@@ -43,7 +44,12 @@ class MemcachedClient {
         bool touch(std::string key, uint32_t expire);
 
     private:
+        void sendRequest(std::string data);
+        std::string readLine(size_t size);
 
+        std::string serverIP;
+        uint16_t port;
+        int fd;
 }; 
 
 #endif
