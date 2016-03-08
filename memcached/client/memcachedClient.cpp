@@ -51,10 +51,11 @@ std::string MemcachedClient::readLine(size_t size) {
     return response;
 }
 
-void MemcachedClient::set(std::string key, std::string value, uint32_t expire) {
+void MemcachedClient::sendCommand(std::string command, std::string key, std::string value,
+        uint32_t expire) {
     size_t valueSize = value.length();
     std::stringstream fmt;
-    fmt << "set " << key << " " << 0 << " " << expire << " " << valueSize << "\r\n";
+    fmt << command << " " << key << " " << 0 << " " << expire << " " << valueSize << "\r\n";
     sendRequest(fmt.str());
 
     value += "\r\n";
@@ -66,6 +67,18 @@ void MemcachedClient::set(std::string key, std::string value, uint32_t expire) {
     }
 }
 
+void MemcachedClient::set(std::string key, std::string value, uint32_t expire) {
+    sendCommand("set", key, value, expire);
+}
+
+void MemcachedClient::add(std::string key, std::string value, uint32_t expire) {
+    sendCommand("add", key, value, expire);
+}
+
+void MemcachedClient::replace(std::string key, std::string value, uint32_t expire) {
+    sendCommand("replace", key, value, expire);
+}
+
 
 int main(int args, char** argv) {
     std::string serverIP("127.0.0.1");
@@ -75,7 +88,8 @@ int main(int args, char** argv) {
     client.connect();
 
     client.set("key10", "value10");
-
+    client.add("key4", "value4");
+    client.replace("key4", "replace");
 
     return 0;
 }

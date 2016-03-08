@@ -13,9 +13,9 @@ class MemcachedClient {
 
         void set(std::string key, std::string value, uint32_t expire = 0);
 
-        bool add(std::string key, std::string value, uint32_t expire = 0);
+        void add(std::string key, std::string value, uint32_t expire = 0);
 
-        bool replace(std::string key, std::string value, uint32_t expire = 0);
+        void replace(std::string key, std::string value, uint32_t expire = 0);
 
         bool append(std::string key, std::string value);
 
@@ -44,6 +44,7 @@ class MemcachedClient {
         bool touch(std::string key, uint32_t expire);
 
     private:
+        void sendCommand(std::string command, std::string key, std::string value, uint32_t expire = 0);
         void sendRequest(std::string data);
         std::string readLine(size_t size);
 
