@@ -32,5 +32,46 @@ BOOST_AUTO_TEST_CASE(setAndGet) {
     BOOST_REQUIRE_THROW(client.get("setAndGetNotExistKey"), std::runtime_error);
 }
 
+BOOST_AUTO_TEST_CASE(deleteKey) {
+    client.add("key1", "value1");
+    BOOST_REQUIRE_EQUAL(client.deleteKey("key1"), true);
+    BOOST_REQUIRE_EQUAL(client.deleteKey("key1"), false);
+}
+
+BOOST_AUTO_TEST_CASE(add) {
+    client.set("key1", "value1");
+    BOOST_REQUIRE_EQUAL(client.add("key1", "value1"), false);
+
+    client.deleteKey("key1");
+    BOOST_REQUIRE_EQUAL(client.add("key1", "add"), true);
+    BOOST_REQUIRE_EQUAL(client.get("key1"), "add");
+}
+
+BOOST_AUTO_TEST_CASE(replace) {
+    client.deleteKey("key1");
+    BOOST_REQUIRE_EQUAL(client.replace("key1", "replace"), false);
+
+    client.set("key1", "value1");
+    BOOST_REQUIRE_EQUAL(client.replace("key1", "replace"), true);
+    BOOST_REQUIRE_EQUAL(client.get("key1"), "replace");
+}
+
+BOOST_AUTO_TEST_CASE(append) {
+    client.deleteKey("key1");
+    BOOST_REQUIRE_EQUAL(client.append("key1", "append"), false);
+
+    client.add("key1", "append");
+    BOOST_REQUIRE_EQUAL(client.append("key1", "app"), true);
+    BOOST_REQUIRE_EQUAL(client.get("key1"), "appendapp");
+}
+
+BOOST_AUTO_TEST_CASE(prepend) {
+    client.deleteKey("key1");
+    BOOST_REQUIRE_EQUAL(client.prepend("key1", "pre"), false);
+
+    client.add("key1", "prepend");
+    BOOST_REQUIRE_EQUAL(client.prepend("key1", "pre"), true);
+    BOOST_REQUIRE_EQUAL(client.get("key1"), "preprepend");
+}
 
 BOOST_AUTO_TEST_SUITE_END();
