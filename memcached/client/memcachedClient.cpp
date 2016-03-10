@@ -155,6 +155,11 @@ std::string MemcachedClient::get(std::string key) {
         boost::split(tokens, response, boost::is_any_of(" "));
         size_t bytes = std::stoul(tokens[3]);
         std::string value = readBytes(bytes);
+        std::string end = readBytes(3);
+        if(end != "END") {
+            throw std::runtime_error(end);
+        }
+
         return value;
     }
     else if(response == "END") {
@@ -214,6 +219,10 @@ std::pair<std::string, unsigned long> MemcachedClient::gets(std::string key) {
         unsigned long casUnique = std::stoul(tokens[4]);
         size_t bytes = std::stoul(tokens[3]);
         std::string value = readBytes(bytes);
+        std::string end = readBytes(3);
+        if(end != "END") {
+            throw std::runtime_error(end);
+        }
 
         return std::make_pair(value, casUnique);
     }
@@ -310,19 +319,4 @@ bool MemcachedClient::touch(std::string key, uint32_t expire) {
     fmt << "touch " << key << " " << expire << "\r\n";
 
     return sendRequest(fmt.str(), "TOUCHED", "NOT_FOUND");
-}
-
-
-int main(int args, char** argv) {
-    std::string serverIP("127.0.0.1");
-    uint16_t port = 11211;
-
-    MemcachedClient client(serverIP, port);
-    client.connect();
-
-    client.set("key10", "value10");
-    client.add("key4", "value4");
-    client.replace("key4", "replace");
-
-    return 0;
 }
