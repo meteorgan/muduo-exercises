@@ -125,7 +125,7 @@ bool MemcachedClient::prepend(std::string key, std::string value) {
     return sendStorageCommand("prepend", key, value, 0);
 }
 
-bool MemcachedClient::cas(std::string key, std::string value, unsigned long casUnique, uint32_t expire) {
+bool MemcachedClient::cas(std::string key, std::string value, int64_t casUnique, uint32_t expire) {
     size_t valueSize = value.size();
     std::stringstream fmt;
     fmt << "cas " << key << " " << 0 << " " << expire << " " << valueSize << " " << casUnique << "\r\n";
@@ -170,9 +170,9 @@ std::string MemcachedClient::get(std::string key) {
     }
 }
 
-unsigned long MemcachedClient::getLong(std::string key) {
+uint64_t MemcachedClient::getLong(std::string key) {
     std::string value = get(key);
-    return std::stoul(value);
+    return std::stoull(value);
 }
 
 std::map<std::string, std::string> MemcachedClient::getMulti(std::vector<std::string>& keys)  {
@@ -208,7 +208,7 @@ std::map<std::string, std::string> MemcachedClient::getMulti(std::vector<std::st
     return kvs;
 }
 
-std::pair<std::string, unsigned long> MemcachedClient::gets(std::string key) {
+std::pair<std::string, int64_t> MemcachedClient::gets(std::string key) {
     std::string command = "gets " + key + "\r\n";
     sendRequest(command);
     size_t size = 5 + key.length() + 32 + 10 + 32 + 2 + 4;
@@ -216,7 +216,7 @@ std::pair<std::string, unsigned long> MemcachedClient::gets(std::string key) {
     if(response.find("VALUE") == 0) {
         std::vector<std::string> tokens;
         boost::split(tokens, response, boost::is_any_of(" "));
-        unsigned long casUnique = std::stoul(tokens[4]);
+        int64_t casUnique = std::stol(tokens[4]);
         size_t bytes = std::stoul(tokens[3]);
         std::string value = readBytes(bytes);
         std::string end = readBytes(3);
@@ -234,14 +234,14 @@ std::pair<std::string, unsigned long> MemcachedClient::gets(std::string key) {
     }
 }
 
-std::pair<unsigned long, unsigned long> MemcachedClient::getsLong(std::string key) {
-    std::pair<std::string, unsigned long> res = gets(key);
-    unsigned long v = std::stoul(res.first);
+std::pair<uint64_t, int64_t> MemcachedClient::getsLong(std::string key) {
+    std::pair<std::string, int64_t> res = gets(key);
+    uint64_t v = std::stoull(res.first);
     return std::make_pair(v, res.second);
 }
 
-std::map<std::string, std::pair<std::string, unsigned long>> MemcachedClient::getsMulti(std::vector<std::string>& keys) {
-    std::map<std::string, std::pair<std::string, unsigned long>> kvs;
+std::map<std::string, std::pair<std::string, int64_t>> MemcachedClient::getsMulti(std::vector<std::string>& keys) {
+    std::map<std::string, std::pair<std::string, int64_t>> kvs;
 
     std::string command = "gets";
     for(auto& key : keys) {
@@ -260,7 +260,7 @@ std::map<std::string, std::pair<std::string, unsigned long>> MemcachedClient::ge
         if(tokens[0] == "VALUE") {
             std::string key = tokens[1];
             size_t bytes = std::stoul(tokens[3]);
-            unsigned long casUnique = std::stoul(tokens[4]);
+            int64_t casUnique = std::stol(tokens[4]);
             std::string value = readBytes(bytes);
             kvs[key] = std::make_pair(value, casUnique);
         }
@@ -286,7 +286,7 @@ uint64_t MemcachedClient::incr(std::string key, uint64_t value) {
     fmt << "incr " << key << " " << value << "\r\n";
     sendRequest(fmt.str()); 
     
-    std::string response = readLine(30);
+    std::string response = readLine(100);
     if(response == "NOT_FOUND") {
         throw std::runtime_error("NOT_FOUND");
     }
@@ -301,8 +301,9 @@ uint64_t MemcachedClient::incr(std::string key, uint64_t value) {
 uint64_t MemcachedClient::decr(std::string key, uint64_t value) {
     std::stringstream fmt;
     fmt << "decr " << key << " " << value << "\r\n";
+    sendRequest(fmt.str());
 
-    std::string response = readLine(30);
+    std::string response = readLine(100);
     if(response == "NOT_FOUND") {
         throw std::runtime_error("NOT_FOUND");
     }

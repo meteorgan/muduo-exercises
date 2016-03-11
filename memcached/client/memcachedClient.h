@@ -34,21 +34,21 @@ class MemcachedClient {
 
         bool prepend(std::string key, std::string value);
 
-        bool cas(std::string key, std::string value, unsigned long casUnique, uint32_t expire = 0);
+        bool cas(std::string key, std::string value, int64_t casUnique, uint32_t expire = 0);
 
         std::string get(std::string key);
 
-        unsigned long getLong(std::string key);
+        uint64_t getLong(std::string key);
 
         std::map<std::string, std::string> getMulti(std::vector<std::string>& keys);
 
         // return: <value, cas unique>
-        std::pair<std::string, unsigned long> gets(std::string key);
+        std::pair<std::string, int64_t> gets(std::string key);
 
         // return: <value, case unique>
-        std::pair<unsigned long, unsigned long> getsLong(std::string key);
+        std::pair<uint64_t, int64_t> getsLong(std::string key);
 
-        std::map<std::string, std::pair<std::string, unsigned long>> getsMulti(std::vector<std::string>& keys);
+        std::map<std::string, std::pair<std::string, int64_t>> getsMulti(std::vector<std::string>& keys);
 
         uint64_t incr(std::string key, uint64_t value);
 
