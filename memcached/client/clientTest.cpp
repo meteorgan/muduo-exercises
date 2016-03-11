@@ -106,6 +106,14 @@ BOOST_AUTO_TEST_CASE(incr) {
 
     client.set("key1", "incr");
     BOOST_REQUIRE_THROW(client.incr("key1", 1), std::runtime_error);
+
+    // 增大后的值如果大于UINT64_MAX, 会回绕
+    client.set("key1", std::to_string(UINT64_MAX));
+    BOOST_REQUIRE_EQUAL(client.incr("key1", 10), UINT64_MAX+10);
+
+    // 大于UINT64_MAX的值被认为是字符串
+    client.set("key1", "18446744073709551616");
+    BOOST_REQUIRE_THROW(client.incr("key1", 1), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(decr) {
@@ -117,6 +125,10 @@ BOOST_AUTO_TEST_CASE(decr) {
 
     client.append("key1", "xxx");
     BOOST_REQUIRE_THROW(client.decr("key1", 1), std::runtime_error);
+
+    // 减小后的值不小于0
+    client.set("key1", "10");
+    BOOST_REQUIRE_EQUAL(client.decr("key1", 20), 0);
 }
 
 BOOST_AUTO_TEST_CASE(touch) {
