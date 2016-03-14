@@ -5,12 +5,16 @@
 Item::Item(const std::string& key, const std::string& value, 
         uint16_t flags, uint32_t expireTime, uint64_t cas) 
     : key(key), value(value), flags(flags), expireTime(expireTime), casUnique(cas) {
-        if(expireTime > maxExpireTime) {
-            expireTimestamp = expireTime;
-        }
-        else {
-            expireTimestamp = static_cast<uint32_t>(muduo::Timestamp::now().secondsSinceEpoch()) + expireTime;
-        }
+        setExpireTimestamp(expireTime);
+}
+
+void Item::setExpireTimestamp(uint32_t expireTime) {
+    if(expireTime > maxExpireTime) {
+        expireTimestamp = expireTime;
+    }
+    else {
+        expireTimestamp = static_cast<uint32_t>(muduo::Timestamp::now().secondsSinceEpoch()) + expireTime;
+    }
 }
 
 void Item::set(const std::string& value, uint64_t cas) {
@@ -60,4 +64,8 @@ uint64_t Item::decr(uint64_t decrement) {
     value = std::to_string(v);
 
     return v;
+}
+
+void Item::touch(uint32_t expireTime) {
+    setExpireTimestamp(expireTime);
 }

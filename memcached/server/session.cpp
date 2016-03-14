@@ -1,25 +1,9 @@
-#include "memcached.h"
+#include "session.h"
 
-#include "muduo/base/Logging.h"
-
-#include <boost/bind.hpp>
 #include <boost/algorithm/string.hpp>
 
-Memcached::Memcached(muduo::net::EventLoop* loop, 
-        const muduo::net::InetAddress& listenAddr) 
-    : listenAddr(listenAddr), casUnique(0), server(loop, listenAddr, "Memcached") {
-        server.setConnectionCallback(boost::bind(&Memcached::onConnection, this, _1));
-}
 
-void Memcached::start() {
-    server.start();
-}
-
-void Memcached::onConnection(const muduo::net::TcpConnectionPtr& conn) {
-    LOG_INFO << conn->peerAddress().toIpPort() << " is " << (conn->connected() ? "UP" : "DOWN");
-}
-
-void Memcached::onMessage(const muduo::net::TcpConnectionPtr& conn, 
+void Session::onMessage(const muduo::net::TcpConnectionPtr& conn, 
         muduo::net::Buffer* buffer, muduo::Timestamp time) {
     while(buffer->findCRLF()) {
         const char* crlf = buffer->findCRLF();
@@ -27,6 +11,20 @@ void Memcached::onMessage(const muduo::net::TcpConnectionPtr& conn,
         buffer->retrieveUntil(crlf + 2);
 
         if(currentCommand != "") {
+            if(currentCommand == "add") {
+            }
+            else if(currentCommand == "set") {
+            }
+            else if(currentCommand == "replace") {
+            }
+            else if(currentCommand == "append") {
+            }
+            else if(currentCommand == "prepend") {
+            }
+            else if(currentCommand == "cas") {
+            }
+            else {
+            }
         }
         else {
             std::vector<std::string> tokens; 
@@ -100,7 +98,7 @@ void Memcached::onMessage(const muduo::net::TcpConnectionPtr& conn,
     }
 }
 
-bool Memcached::isAllNumber(std::vector<std::string>::const_iterator begin, 
+bool Session::isAllNumber(std::vector<std::string>::const_iterator begin, 
         std::vector<std::string>::const_iterator end) {
     while(begin++ != end) {
         if(!(isNumber(*begin))) {
@@ -111,7 +109,7 @@ bool Memcached::isAllNumber(std::vector<std::string>::const_iterator begin,
     return true;
 }
 
-bool Memcached::isNumber(const std::string& str) {
+bool Session::isNumber(const std::string& str) {
     for(auto& ch : str) {
         if(!(isdigit(ch))) {
             return false;
@@ -121,7 +119,7 @@ bool Memcached::isNumber(const std::string& str) {
     return true;
 }
 
-bool Memcached::validateStorageCommand(const std::vector<std::string>& tokens, size_t size, 
+bool Session::validateStorageCommand(const std::vector<std::string>& tokens, size_t size, 
         const muduo::net::TcpConnectionPtr& conn) {
     bool result = true;
     if(tokens.size() != size) {
@@ -136,10 +134,4 @@ bool Memcached::validateStorageCommand(const std::vector<std::string>& tokens, s
     }
 
     return result;
-}
-
-
-int main(int argc, char** argv) {
-
-    return 0;
 }

@@ -22,9 +22,13 @@ class Item {
 
         uint64_t decr(uint64_t decrement);
 
+        void touch(uint32_t expireTime);
+
         bool isExpire();
 
     private:
+        void setExpireTimestamp(uint32_t expireTime);
+
         const uint32_t maxExpireTime = 2592000;
         std::string key;
         std::string value;
