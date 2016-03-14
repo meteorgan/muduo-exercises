@@ -14,29 +14,30 @@ class Memcached {
 
         void start();
 
-        void set();
+        void set(const std::string& key, const std::string& value, uint16_t flags, uint32_t exptime);
        
-        void add();
+        void add(const std::string& key, const std::string& value, uint16_t flags, uint32_t exptime);
 
-        void replace();
+        void replace(const std::string& key, const std::string& value, uint16_t flags, uint32_t exptime);
 
-        void append();
+        void append(const std::string& key, const std::string& app);
 
-        void prepend();
+        void prepend(const std::string& key, const std::string pre);
 
-        void cas();
+        void cas(const std::string& key, const std::string& value, uint16_t flags, 
+                uint32_t exptime, uint64_t oldCas);
 
-        void get();
+        std::map<std::string, std::string> get(std::vector<std::string>& keys);
 
-        void gets();
+        std::map<std::string, std::pair<std::string, uint64_t>> gets(std::vector<std::string>& keys);
 
-        void deleteKey();
+        void deleteKey(std::string& key);
 
-        void incr();
+        uint64_t incr(std::string& key, uint64_t value);
 
-        void decr();
+        uint64_t decr(std::string& key, uint64_t value);
 
-        void touch();
+        void touch(std::string& key, uint32_t exptime);
 
         void stats();
 
