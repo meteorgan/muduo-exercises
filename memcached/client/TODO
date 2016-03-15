@@ -1,0 +1,2 @@
+1. 支持多个memcached服务器
+2. readLine 实现，比对和现有实现区别；异常处理; incr/decr处理

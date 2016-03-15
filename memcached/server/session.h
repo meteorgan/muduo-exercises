@@ -1,15 +1,17 @@
 #ifndef MEMCACHED_SESSION_H
 #define MEMCACHED_SESSION_H
 
-#include "memcached.h"
+#include "muduo/net/TcpConnection.h"
 
 #include <boost/bind.hpp>
 
+class Memcached;
+
 class Session {
     public:
-        Session(Memcached* memServer, muduo::net::TcpConnectionPtr& conn) 
-            :server(memServer), currentCommand(""), flags(0), exptime(0), 
-            bytesToRead(0), cas(0) {
+        Session(Memcached* memServer, const muduo::net::TcpConnectionPtr& conn) 
+            :memServer(memServer), currentCommand(""), currentKey(""), flags(0), 
+            exptime(0), bytesToRead(0), cas(0) {
                 conn->setMessageCallback(boost::bind(&Session::onMessage, this, _1, _2, _3));
         }
 
@@ -22,6 +24,7 @@ class Session {
                 std::vector<std::string>::const_iterator end);
 
         bool validateStorageCommand(const std::vector<std::string>& tokens, size_t size, const muduo::net::TcpConnectionPtr& conn);
+        void setStorageCommandInfo(const std::vector<std::string>& tokens);
 
         const std::string nonExistentCommand = "ERROR\r\n";
         const std::string badFormat = "CLIENT_ERROR bad command line format\r\n";
@@ -35,9 +38,10 @@ class Session {
         const std::string deleted = "DELETED\r\n";
         const std::string touched = "TOUCHED\r\n";
 
-        Memcached* server;
+        Memcached* memServer;
 
         std::string currentCommand;
+        std::string currentKey;
         uint16_t flags;
         uint32_t exptime;
         uint32_t bytesToRead;

@@ -12,8 +12,15 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
 
         if(currentCommand != "") {
             if(currentCommand == "add") {
+                if(memServer->exists(currentKey)) {
+                    conn->send(notStored);
+                }
+                else {
+                    memServer->set(currentKey, request, flags, exptime);
+                }
             }
             else if(currentCommand == "set") {
+                memServer->set(currentKey, request, flags, exptime);
             }
             else if(currentCommand == "replace") {
             }
@@ -25,31 +32,63 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
             }
             else {
             }
+            currentCommand = "";
+            currentKey = "";
         }
         else {
             std::vector<std::string> tokens; 
             boost::split(tokens, request, boost::is_any_of(" "));
             if(tokens[0] == "add") {
-                validateStorageCommand(tokens, 5, conn);
+                if(validateStorageCommand(tokens, 5, conn)) {
+                    setStorageCommandInfo(tokens);
+                }
             }
             else if(tokens[0] == "set") {
-                validateStorageCommand(tokens, 5, conn);
+                if(validateStorageCommand(tokens, 5, conn)) {
+                    setStorageCommandInfo(tokens);
+                }
             }
             else if(tokens[0] == "replace") {
-                validateStorageCommand(tokens, 5, conn);
+                if(validateStorageCommand(tokens, 5, conn)) {
+                    setStorageCommandInfo(tokens);
+                }
             }
             else if(tokens[0] == "append") {
-                validateStorageCommand(tokens, 5, conn);
+                if(validateStorageCommand(tokens, 5, conn)) {
+                    setStorageCommandInfo(tokens);
+                }
             }
             else if(tokens[0] == "prepend") {
-                validateStorageCommand(tokens, 5, conn);
+                if(validateStorageCommand(tokens, 5, conn)) {
+                    setStorageCommandInfo(tokens);
+                }
             }
             else if(tokens[0] == "cas") {
-                validateStorageCommand(tokens, 6, conn);
+                if(validateStorageCommand(tokens, 6, conn)) {
+                    setStorageCommandInfo(tokens);
+                }
             }
             else if(tokens[0] == "get") {
                 if(tokens.size() <= 1) {
                     conn->send(nonExistentCommand);
+                }
+                else {
+                    std::vector<std::string> keys(++tokens.begin(), tokens.end());
+                    std::map<std::string, std::shared_ptr<Item>> values = memServer->get(keys);    
+                    auto iter = ++tokens.begin();
+                    while(iter++ != tokens.end()) {
+                        auto itemIter = values.find(*iter);
+                        if(itemIter != values.end()) {
+                            std::string key = *iter;
+                            std::string value = itemIter->second->get();
+                            uint16_t flags = itemIter->second->getFlags();
+                            size_t size = value.size(); 
+                            std::string line = "VALUE " + std::to_string(flags) + " " 
+                                + std::to_string(size) + "\r\n";
+                            conn->send(line);
+                        }
+                    }
+                    conn->send(end);
                 }
             }
             else if(tokens[0] == "gets") {
@@ -134,4 +173,15 @@ bool Session::validateStorageCommand(const std::vector<std::string>& tokens, siz
     }
 
     return result;
+}
+
+void Session::setStorageCommandInfo(const std::vector<std::string>& tokens) {
+    currentCommand = tokens[0];
+    currentKey = tokens[1];
+    flags = stoul(tokens[2]);
+    exptime = stoul(tokens[3]);
+    bytesToRead = stoul(tokens[4]);
+    if(tokens.size() == 6) {
+        cas = stoull(tokens[5]);
+    }
 }

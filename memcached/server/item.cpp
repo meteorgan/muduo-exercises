@@ -17,8 +17,10 @@ void Item::setExpireTimestamp(uint32_t expireTime) {
     }
 }
 
-void Item::set(const std::string& value, uint64_t cas) {
+void Item::set(const std::string& value, uint16_t flags, uint32_t exptime, uint64_t cas) {
     this->value = value;
+    this->flags = flags;
+    setExpireTimestamp(exptime);
     casUnique = cas;
 }
 

@@ -8,7 +8,7 @@ class Item {
         Item(const std::string& key, const std::string& value,
                 uint16_t flags, uint32_t expireTime, uint64_t cas);
 
-        void set(const std::string& newValue, uint64_t cas);
+        void set(const std::string& newValue, uint16_t flags, uint32_t exptime, uint64_t cas);
 
         std::string get();
 
@@ -25,6 +25,10 @@ class Item {
         void touch(uint32_t expireTime);
 
         bool isExpire();
+
+        uint16_t getFlags() { return flags; }
+
+        uint64_t getCas() { return casUnique; }
 
     private:
         void setExpireTimestamp(uint32_t expireTime);

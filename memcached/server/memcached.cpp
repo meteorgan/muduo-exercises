@@ -1,5 +1,6 @@
 #include "memcached.h"
 
+#include "muduo/net/EventLoop.h"
 #include "muduo/base/Logging.h"
 
 #include <boost/bind.hpp>
@@ -16,130 +17,64 @@ void Memcached::start() {
 }
 
 void Memcached::onConnection(const muduo::net::TcpConnectionPtr& conn) {
-    LOG_INFO << conn->peerAddress().toIpPort() << " is " << (conn->connected() ? "UP" : "DOWN");
-}
-
-void Memcached::onMessage(const muduo::net::TcpConnectionPtr& conn, 
-        muduo::net::Buffer* buffer, muduo::Timestamp time) {
-    while(buffer->findCRLF()) {
-        const char* crlf = buffer->findCRLF();
-        std::string request(buffer->peek(), crlf);
-        buffer->retrieveUntil(crlf + 2);
-
-        if(currentCommand != "") {
-        }
-        else {
-            std::vector<std::string> tokens; 
-            boost::split(tokens, request, boost::is_any_of(" "));
-            if(tokens[0] == "add") {
-                validateStorageCommand(tokens, 5, conn);
-            }
-            else if(tokens[0] == "set") {
-                validateStorageCommand(tokens, 5, conn);
-            }
-            else if(tokens[0] == "replace") {
-                validateStorageCommand(tokens, 5, conn);
-            }
-            else if(tokens[0] == "append") {
-                validateStorageCommand(tokens, 5, conn);
-            }
-            else if(tokens[0] == "prepend") {
-                validateStorageCommand(tokens, 5, conn);
-            }
-            else if(tokens[0] == "cas") {
-                validateStorageCommand(tokens, 6, conn);
-            }
-            else if(tokens[0] == "get") {
-                if(tokens.size() <= 1) {
-                    conn->send(nonExistentCommand);
-                }
-            }
-            else if(tokens[0] == "gets") {
-                if(tokens.size() <= 1) {
-                    conn->send(nonExistentCommand);
-                }
-            }
-            else if(tokens[0] == "delete") {
-                if(tokens.size() != 2) {
-                    conn->send(nonExistentCommand);
-                }
-            }
-            else if(tokens[0] == "incr") {
-                if(tokens.size() != 3) {
-                    conn->send(nonExistentCommand);
-                }
-                else if(!isNumber(tokens[2])) {
-                    conn->send(nonNumeric);
-                }
-            }
-            else if(tokens[0] == "decr") {
-                if(tokens.size() != 3) {
-                    conn->send(nonExistentCommand);
-                }
-                else if(!isNumber(tokens[2])) {
-                    conn->send(nonNumeric);
-                }
-            }
-            else if(tokens[0] == "touch") {
-                if(tokens.size() != 3) {
-                    conn->send(nonExistentCommand);
-                }
-                else if(!isNumber(tokens[2])) {
-                    conn->send(invalidExptime);
-                }
-            }
-            else if(tokens[0] == "stats") {
-                if(tokens.size() != 1) {
-                    conn->send(nonExistentCommand);
-                }
-            }
-            else {
-                conn->send(nonExistentCommand);
-            }
-        }
-    }
-}
-
-bool Memcached::isAllNumber(std::vector<std::string>::const_iterator begin, 
-        std::vector<std::string>::const_iterator end) {
-    while(begin++ != end) {
-        if(!(isNumber(*begin))) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool Memcached::isNumber(const std::string& str) {
-    for(auto& ch : str) {
-        if(!(isdigit(ch))) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool Memcached::validateStorageCommand(const std::vector<std::string>& tokens, size_t size, 
-        const muduo::net::TcpConnectionPtr& conn) {
-    bool result = true;
-    if(tokens.size() != size) {
-        conn->send(nonExistentCommand);
-        result = false;
+    std::string name(conn->name().c_str());
+    if(conn->connected()) {
+        LOG_INFO << conn->peerAddress().toIpPort() << " is UP.";
+        std::unique_ptr<Session> session(new Session(this, conn));
+        sessions[name] = std::move(session);
     }
     else {
-        result = isAllNumber(++tokens.begin(), tokens.end());
-        if(!result) {
-            conn->send(badFormat);
+        LOG_INFO << conn->peerAddress().toIpPort() << " is DOWN.";
+        sessions.erase(name);
+    }
+}
+
+void Memcached::set(const std::string& key, const std::string& value, 
+        uint16_t flags, uint32_t exptime) {
+    ++casUnique;
+
+    auto iter = items.find(key);
+    if(iter != items.end()) {
+        iter->second->set(value, flags, exptime, casUnique);
+    }
+    else {
+        std::shared_ptr<Item> item(new Item(key, value, flags, exptime, casUnique));
+        items[key] = item;
+    }
+}
+
+std::map<std::string, std::shared_ptr<Item>> Memcached::get(std::vector<std::string>& keys) {
+    std::map<std::string, std::shared_ptr<Item>> results;
+    for(auto key : keys) {
+        auto iter = items.find(key);
+        if(iter != items.end()) {
+            results[key] = iter->second;
         }
     }
 
-    return result;
+    return results;
 }
+
+bool Memcached::exists(const std::string& key) {
+    return (items.find(key) != items.end());
+}
+
 
 
 int main(int argc, char** argv) {
+    std::string defaultIP = "127.0.0.1";
+    uint16_t defaultPort = 11211;
+    if(argc >= 3) {
+        defaultIP = std::string(argv[1]);
+        defaultPort = atoi(argv[2]);
+    }
+    
+    muduo::net::InetAddress listenAddr(defaultIP, defaultPort);
+    muduo::net::EventLoop loop;
+    Memcached server(&loop, listenAddr);    
+    server.start();
+
+    loop.loop();
 
     return 0;
 }

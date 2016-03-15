@@ -5,8 +5,10 @@
 #include "muduo/net/TcpServer.h"
 
 #include "item.h"
+#include "session.h"
 
-#include <set>
+#include <map>
+
 
 class Memcached {
     public:
@@ -27,9 +29,9 @@ class Memcached {
         void cas(const std::string& key, const std::string& value, uint16_t flags, 
                 uint32_t exptime, uint64_t oldCas);
 
-        std::map<std::string, std::string> get(std::vector<std::string>& keys);
+        std::map<std::string, std::shared_ptr<Item>> get(std::vector<std::string>& keys);
 
-        std::map<std::string, std::pair<std::string, uint64_t>> gets(std::vector<std::string>& keys);
+        std::map<std::string, std::shared_ptr<Item>> gets(std::vector<std::string>& keys);
 
         void deleteKey(std::string& key);
 
@@ -41,6 +43,8 @@ class Memcached {
 
         void stats();
 
+        bool exists(const std::string& key);
+
     private:
         void onConnection(const muduo::net::TcpConnectionPtr& conn);
 
@@ -48,7 +52,8 @@ class Memcached {
         uint64_t casUnique;
         muduo::net::TcpServer server;
     
-        std::set<Item> items;
+        std::map<std::string, std::unique_ptr<Session>> sessions;
+        std::map<std::string, std::shared_ptr<Item>> items;
 };
 
 #endif
