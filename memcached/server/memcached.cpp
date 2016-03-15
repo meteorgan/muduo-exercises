@@ -1,4 +1,5 @@
 #include "memcached.h"
+#include "session.h"
 
 #include "muduo/net/EventLoop.h"
 #include "muduo/base/Logging.h"
@@ -66,7 +67,7 @@ int main(int argc, char** argv) {
     uint16_t defaultPort = 11211;
     if(argc >= 3) {
         defaultIP = std::string(argv[1]);
-        defaultPort = atoi(argv[2]);
+        defaultPort = static_cast<uint16_t>(atoi(argv[2]));
     }
     
     muduo::net::InetAddress listenAddr(defaultIP, defaultPort);

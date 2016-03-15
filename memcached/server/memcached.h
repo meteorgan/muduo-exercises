@@ -5,10 +5,10 @@
 #include "muduo/net/TcpServer.h"
 
 #include "item.h"
-#include "session.h"
 
 #include <map>
 
+class Session;
 
 class Memcached {
     public:

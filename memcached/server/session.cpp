@@ -1,7 +1,10 @@
 #include "session.h"
+#include "item.h"
+#include "memcached.h"
 
 #include <boost/algorithm/string.hpp>
 
+#include <map>
 
 void Session::onMessage(const muduo::net::TcpConnectionPtr& conn, 
         muduo::net::Buffer* buffer, muduo::Timestamp time) {
