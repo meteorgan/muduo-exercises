@@ -1,4 +1,4 @@
-CFLAGS = -std=c++11 -Wall ${include_dir}
+CFLAGS = -std=c++11 -Wall -g ${include_dir}
 include_dir = -I /home/meteorgan/muduo
 lib_flags = -L /home/meteorgan/build/release/lib -lmuduo_base_cpp11 -lmuduo_net_cpp11 -pthread
 

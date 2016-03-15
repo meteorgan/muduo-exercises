@@ -20,10 +20,12 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                 }
                 else {
                     memServer->set(currentKey, request, flags, exptime);
+                    conn->send(stored);
                 }
             }
             else if(currentCommand == "set") {
                 memServer->set(currentKey, request, flags, exptime);
+                conn->send(stored);
             }
             else if(currentCommand == "replace") {
             }
@@ -79,7 +81,7 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                     std::vector<std::string> keys(++tokens.begin(), tokens.end());
                     std::map<std::string, std::shared_ptr<Item>> values = memServer->get(keys);    
                     auto iter = ++tokens.begin();
-                    while(iter++ != tokens.end()) {
+                    while(iter != tokens.end()) {
                         auto itemIter = values.find(*iter);
                         if(itemIter != values.end()) {
                             std::string key = *iter;
@@ -90,6 +92,7 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                                 + std::to_string(size) + "\r\n";
                             conn->send(line);
                         }
+                        ++iter;
                     }
                     conn->send(end);
                 }
@@ -142,10 +145,11 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
 
 bool Session::isAllNumber(std::vector<std::string>::const_iterator begin, 
         std::vector<std::string>::const_iterator end) {
-    while(begin++ != end) {
+    while(begin != end) {
         if(!(isNumber(*begin))) {
             return false;
         }
+        ++begin;
     }
 
     return true;
@@ -169,7 +173,7 @@ bool Session::validateStorageCommand(const std::vector<std::string>& tokens, siz
         result = false;
     }
     else {
-        result = isAllNumber(++tokens.begin(), tokens.end());
+        result = isAllNumber(tokens.begin()+2, tokens.end());
         if(!result) {
             conn->send(badFormat);
         }
