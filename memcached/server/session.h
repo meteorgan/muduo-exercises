@@ -22,14 +22,23 @@ class Session {
         bool isNumber(const std::string& str);
         bool isAllNumber(std::vector<std::string>::const_iterator begin, 
                 std::vector<std::string>::const_iterator end);
+        bool isUint64(const std::string& str);
+        bool isUint32(const std::string& str);
+        bool isUint16(const std::string& str);
+        bool isUint(const std::string& str, const std::string& uint);
 
         bool validateStorageCommand(const std::vector<std::string>& tokens, size_t size, const muduo::net::TcpConnectionPtr& conn);
         void setStorageCommandInfo(const std::vector<std::string>& tokens);
+
+        const std::string maxUint64 = "18446744073709551616";
+        const std::string maxUint32 = "4294967296";
+        const std::string maxUint16 = "65536";
 
         const std::string nonExistentCommand = "ERROR\r\n";
         const std::string badFormat = "CLIENT_ERROR bad command line format\r\n";
         const std::string nonNumeric = "CLIENT_ERROR cannot increment or decrement non-numeric value\r\n";
         const std::string invalidExptime = "CLIENT_ERROR invalid exptime argument\r\n";
+        const std::string invalidDeltaArgument = "CLIENT_ERROR invalid numeric delta argument\r\n";
         const std::string stored = "STORED\r\n";
         const std::string notStored = "NOT_STORED\r\n";
         const std::string exists = "EXISTS\r\n";

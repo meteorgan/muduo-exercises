@@ -58,12 +58,8 @@ void Memcached::prepend(const std::string& key, const std::string& pre) {
 
 std::shared_ptr<Item> Memcached::get(const std::string& key) {
     auto iter = items.find(key);
-    if(iter == items.end()) {
-        return nullptr;
-    }
-    else {
-        return (*iter).second;
-    }
+    assert(iter != items.end());
+    return (*iter).second;
 }
 
 std::map<std::string, std::shared_ptr<Item>> Memcached::get(const std::vector<std::string>& keys) {
@@ -80,6 +76,31 @@ std::map<std::string, std::shared_ptr<Item>> Memcached::get(const std::vector<st
 
 void Memcached::deleteKey(const std::string& key) {
     items.erase(key);
+}
+
+uint64_t Memcached::incr(const std::string& key, const std::string& value) {
+    uint64_t increment = std::stoull(value);
+    auto iter = items.find(key);
+    assert(iter != items.end());
+    uint64_t result = iter->second->incr(increment);
+
+    return result;
+}
+
+uint64_t Memcached::decr(const std::string& key, const std::string& value) {
+    uint64_t decrement = std::stoull(value);
+    auto iter = items.find(key);
+    assert(iter != items.end());
+    uint64_t result = iter->second->decr(decrement);
+
+    return result;
+}
+
+void Memcached::touch(const std::string& key, const std::string& value) {
+    uint32_t exptime = std::stoul(value);
+    auto iter = items.find(key);
+    assert(iter != items.end());
+    iter->second->touch(exptime);
 }
 
 bool Memcached::exists(const std::string& key) {

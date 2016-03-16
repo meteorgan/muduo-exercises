@@ -47,9 +47,7 @@ bool Item::isExpire() {
     return (current >= expireTimestamp);
 }
 
-
-// 1. better methods?
-// 2. 溢出: a. value转uint64_t溢出(throw std::out_of_range)； b. 相加后溢出(回绕)
+// 相加后溢出(回绕)
 uint64_t Item::incr(uint64_t increment) {
     uint64_t v = std::stoull(value) + increment;
     value = std::to_string(v);

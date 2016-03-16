@@ -181,23 +181,49 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                 if(tokens.size() != 3) {
                     conn->send(nonExistentCommand);
                 }
-                else if(!isNumber(tokens[2])) {
-                    conn->send(nonNumeric);
+                else if(!isUint64(tokens[2])) {
+                    conn->send(invalidDeltaArgument);
+                }
+                else if(!memServer->exists(tokens[1])) {
+                    conn->send(notFound);
+                }
+                else {
+                    std::shared_ptr<Item> item = memServer->get(tokens[1]);
+                    if(!isUint64(item->get())) {
+                        conn->send(nonNumeric);
+                    }
+                    else {
+                        uint64_t result = memServer->incr(tokens[1], tokens[2]);
+                        conn->send(std::to_string(result) + "\r\n");
+                    }
                 }
             }
             else if(tokens[0] == "decr") {
                 if(tokens.size() != 3) {
                     conn->send(nonExistentCommand);
                 }
-                else if(!isNumber(tokens[2])) {
-                    conn->send(nonNumeric);
+                else if(!isUint64(tokens[2])) {
+                    conn->send(invalidDeltaArgument);
+                }
+                else if(!memServer->exists(tokens[1])) {
+                    conn->send(notFound);
+                }
+                else {
+                    std::shared_ptr<Item> item = memServer->get(tokens[1]);
+                    if(!isUint64(item->get())) {
+                        conn->send(nonNumeric);
+                    }
+                    else {
+                        uint64_t result = memServer->decr(tokens[1], tokens[2]);
+                        conn->send(std::to_string(result) + "\r\n");
+                    }
                 }
             }
             else if(tokens[0] == "touch") {
                 if(tokens.size() != 3) {
                     conn->send(nonExistentCommand);
                 }
-                else if(!isNumber(tokens[2])) {
+                else if(!isUint32(tokens[2])) {
                     conn->send(invalidExptime);
                 }
             }
@@ -226,6 +252,9 @@ bool Session::isAllNumber(std::vector<std::string>::const_iterator begin,
 }
 
 bool Session::isNumber(const std::string& str) {
+    if(str.size() == 0) {
+        return false;
+    }
     for(auto& ch : str) {
         if(!(isdigit(ch))) {
             return false;
@@ -233,6 +262,24 @@ bool Session::isNumber(const std::string& str) {
     }
 
     return true;
+}
+
+bool Session::isUint16(const std::string& str) {
+    return isUint(str, maxUint16);
+}
+
+bool Session::isUint32(const std::string& str) {
+    return isUint(str, maxUint32);
+}
+
+bool Session::isUint64(const std::string& str) {
+    return isUint(str, maxUint64);
+}
+
+bool Session::isUint(const std::string& str, const std::string& uint) {
+    return (isNumber(str)
+            && (str.length() < uint.length() 
+                || (str.length() == uint.length() && str < uint)));
 }
 
 bool Session::validateStorageCommand(const std::vector<std::string>& tokens, size_t size, 
@@ -243,7 +290,10 @@ bool Session::validateStorageCommand(const std::vector<std::string>& tokens, siz
         result = false;
     }
     else {
-        result = isAllNumber(tokens.begin()+2, tokens.end());
+        result = isUint16(tokens[2]) && isUint32(tokens[3]) && isUint32(tokens[4]);
+        if(size == 6) {
+            result = result && isUint64(tokens[5]);
+        }
         if(!result) {
             conn->send(badFormat);
         }
