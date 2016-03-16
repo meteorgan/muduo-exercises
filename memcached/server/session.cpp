@@ -153,8 +153,7 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                             size_t size = value.size();
 
                             std::string line = "VALUE " + key + " " + std::to_string(flags)
-                                + " " + std::to_string(exptime) + " " + std::to_string(size)
-                                + " " + std::to_string(cas) + "\r\n";
+                                + " " + std::to_string(size) + " " + std::to_string(cas) + "\r\n";
                             conn->send(line);
                             conn->send(value+"\r\n");
                         }
@@ -225,6 +224,15 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                 }
                 else if(!isUint32(tokens[2])) {
                     conn->send(invalidExptime);
+                }
+                else {
+                    if(memServer->exists(tokens[1])) {
+                        memServer->touch(tokens[1], tokens[2]);
+                        conn->send(touched);
+                    }
+                    else {
+                        conn->send(notFound);
+                    }
                 }
             }
             else if(tokens[0] == "stats") {
