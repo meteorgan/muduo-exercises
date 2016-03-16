@@ -28,14 +28,51 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                 conn->send(stored);
             }
             else if(currentCommand == "replace") {
+                if(memServer->exists(currentKey)) {
+                    memServer->set(currentKey, request, flags, exptime);
+                    conn->send(stored);
+                }
+                else {
+                    conn->send(notStored);
+                }
             }
             else if(currentCommand == "append") {
+                if(memServer->exists(currentKey)) {
+                    memServer->append(currentKey, request);
+                    conn->send(stored);
+                }
+                else {
+                    conn->send(notStored);
+                }
+                    
             }
             else if(currentCommand == "prepend") {
+               if(memServer->exists(currentKey)) {
+                   memServer->prepend(currentKey, request);
+                   conn->send(stored);
+               }
+               else {
+                   conn->send(notStored);
+               }
             }
             else if(currentCommand == "cas") {
+                if(memServer->exists(currentKey)) {
+                    std::shared_ptr<Item> item = memServer->get(currentKey);
+                    uint64_t oldCas = item->getCas();
+                    if(oldCas != cas) {
+                        conn->send(exists);
+                    }
+                    else {
+                        memServer->set(currentKey, request, flags, exptime);
+                        conn->send(stored);
+                    }
+                }
+                else {
+                    conn->send(notFound);
+                }
             }
             else {
+                conn->send(nonExistentCommand);
             }
             currentCommand = "";
             currentKey = "";
@@ -88,9 +125,10 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                             std::string value = itemIter->second->get();
                             uint16_t flags = itemIter->second->getFlags();
                             size_t size = value.size(); 
-                            std::string line = "VALUE " + std::to_string(flags) + " " 
-                                + std::to_string(size) + "\r\n";
+                            std::string line = "VALUE " + key + " " + std::to_string(flags) 
+                                + " " + std::to_string(size) + "\r\n";
                             conn->send(line);
+                            conn->send(value + "\r\n");
                         }
                         ++iter;
                     }
@@ -101,10 +139,42 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                 if(tokens.size() <= 1) {
                     conn->send(nonExistentCommand);
                 }
+                else {
+                    std::vector<std::string> keys(++tokens.begin(), tokens.end());
+                    std::map<std::string, std::shared_ptr<Item>> items = memServer->get(keys);
+                    auto iter = ++tokens.begin();
+                    while(iter != tokens.end()) {
+                        auto itemIter = items.find(*iter);
+                        if(itemIter != items.end()) {
+                            std::string key = *iter;
+                            std::string value = itemIter->second->get();
+                            uint16_t flags = itemIter->second->getFlags();
+                            uint64_t cas = itemIter->second->getCas();
+                            size_t size = value.size();
+
+                            std::string line = "VALUE " + key + " " + std::to_string(flags)
+                                + " " + std::to_string(exptime) + " " + std::to_string(size)
+                                + " " + std::to_string(cas) + "\r\n";
+                            conn->send(line);
+                            conn->send(value+"\r\n");
+                        }
+                        ++iter;
+                    }
+                    conn->send(end);
+                }
             }
             else if(tokens[0] == "delete") {
                 if(tokens.size() != 2) {
                     conn->send(nonExistentCommand);
+                }
+                else {
+                    if(!memServer->exists(tokens[1])) {
+                        conn->send(notFound);
+                    }
+                    else {
+                        memServer->deleteKey(tokens[1]);
+                        conn->send(deleted);
+                    }
                 }
             }
             else if(tokens[0] == "incr") {

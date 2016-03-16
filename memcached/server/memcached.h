@@ -18,28 +18,21 @@ class Memcached {
 
         void set(const std::string& key, const std::string& value, uint16_t flags, uint32_t exptime);
        
-        void add(const std::string& key, const std::string& value, uint16_t flags, uint32_t exptime);
-
-        void replace(const std::string& key, const std::string& value, uint16_t flags, uint32_t exptime);
-
         void append(const std::string& key, const std::string& app);
 
-        void prepend(const std::string& key, const std::string pre);
+        void prepend(const std::string& key, const std::string& pre);
 
-        void cas(const std::string& key, const std::string& value, uint16_t flags, 
-                uint32_t exptime, uint64_t oldCas);
+        std::shared_ptr<Item> get(const std::string& key);
 
-        std::map<std::string, std::shared_ptr<Item>> get(std::vector<std::string>& keys);
+        std::map<std::string, std::shared_ptr<Item>> get(const std::vector<std::string>& keys);
 
-        std::map<std::string, std::shared_ptr<Item>> gets(std::vector<std::string>& keys);
+        void deleteKey(const std::string& key);
 
-        void deleteKey(std::string& key);
+        uint64_t incr(const std::string& key, uint64_t value);
 
-        uint64_t incr(std::string& key, uint64_t value);
+        uint64_t decr(const std::string& key, uint64_t value);
 
-        uint64_t decr(std::string& key, uint64_t value);
-
-        void touch(std::string& key, uint32_t exptime);
+        void touch(const std::string& key, uint32_t exptime);
 
         void stats();
 

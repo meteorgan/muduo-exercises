@@ -44,7 +44,29 @@ void Memcached::set(const std::string& key, const std::string& value,
     }
 }
 
-std::map<std::string, std::shared_ptr<Item>> Memcached::get(std::vector<std::string>& keys) {
+void Memcached::append(const std::string& key, const std::string& app) {
+    ++casUnique;
+    auto itemPtr = (*items.find(key)).second;
+    itemPtr->append(app, casUnique);
+}
+
+void Memcached::prepend(const std::string& key, const std::string& pre) {
+    ++casUnique;
+    auto itemPtr = (*items.find(key)).second;
+    itemPtr->prepend(pre, casUnique);
+}
+
+std::shared_ptr<Item> Memcached::get(const std::string& key) {
+    auto iter = items.find(key);
+    if(iter == items.end()) {
+        return nullptr;
+    }
+    else {
+        return (*iter).second;
+    }
+}
+
+std::map<std::string, std::shared_ptr<Item>> Memcached::get(const std::vector<std::string>& keys) {
     std::map<std::string, std::shared_ptr<Item>> results;
     for(auto key : keys) {
         auto iter = items.find(key);
@@ -54,6 +76,10 @@ std::map<std::string, std::shared_ptr<Item>> Memcached::get(std::vector<std::str
     }
 
     return results;
+}
+
+void Memcached::deleteKey(const std::string& key) {
+    items.erase(key);
 }
 
 bool Memcached::exists(const std::string& key) {
