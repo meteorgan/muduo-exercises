@@ -284,6 +284,9 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                     conn->send(nonExistentCommand);
                 }
             }
+            else if(tokens[0] == "quit") {
+                conn->shutdown();
+            }
             else {
                 conn->send(nonExistentCommand);
             }
