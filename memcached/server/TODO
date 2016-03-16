@@ -4,3 +4,8 @@
 
 Memcached 问题:
 1. 给flags设置一个大于uint32_t的值，会发生回绕
+2. slab实现
+3. 数值转换实现，对大小的限定(uint32_t, uint64_t)
+4. value大小的限定
+5. lru实现
+6. 参数解析？多余参数处理
