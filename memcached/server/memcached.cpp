@@ -67,7 +67,12 @@ std::map<std::string, std::shared_ptr<Item>> Memcached::get(const std::vector<st
     for(auto key : keys) {
         auto iter = items.find(key);
         if(iter != items.end()) {
-            results[key] = iter->second;
+            if(iter->second->isExpire()) {
+                items.erase(iter);
+            }
+            else {
+                results[key] = iter->second;
+            }
         }
     }
 
@@ -104,7 +109,17 @@ void Memcached::touch(const std::string& key, const std::string& value) {
 }
 
 bool Memcached::exists(const std::string& key) {
-    return (items.find(key) != items.end());
+    auto iter = items.find(key);
+    if(iter == items.end()) {
+        return false;
+    }
+    else {
+        bool expired = iter->second->isExpire();
+        if(expired) {
+            items.erase(iter);
+        }
+        return !expired;
+    }
 }
 
 
