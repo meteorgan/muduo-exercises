@@ -84,19 +84,21 @@ void Memcached::deleteKey(const std::string& key) {
 }
 
 uint64_t Memcached::incr(const std::string& key, const std::string& value) {
+    ++casUnique;
     uint64_t increment = std::stoull(value);
     auto iter = items.find(key);
     assert(iter != items.end());
-    uint64_t result = iter->second->incr(increment);
+    uint64_t result = iter->second->incr(increment, casUnique);
 
     return result;
 }
 
 uint64_t Memcached::decr(const std::string& key, const std::string& value) {
+    ++casUnique;
     uint64_t decrement = std::stoull(value);
     auto iter = items.find(key);
     assert(iter != items.end());
-    uint64_t result = iter->second->decr(decrement);
+    uint64_t result = iter->second->decr(decrement, casUnique);
 
     return result;
 }

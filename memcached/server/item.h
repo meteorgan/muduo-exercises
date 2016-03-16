@@ -18,9 +18,9 @@ class Item {
 
         void prepend(const std::string& pre, uint64_t cas);
 
-        uint64_t incr(uint64_t increment);
+        uint64_t incr(uint64_t increment, uint64_t cas);
 
-        uint64_t decr(uint64_t decrement);
+        uint64_t decr(uint64_t decrement, uint64_t cas);
 
         void touch(uint32_t expireTime);
 

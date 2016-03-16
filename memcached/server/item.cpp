@@ -49,20 +49,22 @@ bool Item::isExpire() {
 }
 
 // 相加后溢出(回绕)
-uint64_t Item::incr(uint64_t increment) {
+uint64_t Item::incr(uint64_t increment, uint64_t cas) {
     uint64_t v = std::stoull(value) + increment;
     value = std::to_string(v);
+    casUnique = cas;
 
     return v;
 }
 
-uint64_t Item::decr(uint64_t decrement) {
+uint64_t Item::decr(uint64_t decrement, uint64_t cas) {
     uint64_t num = std::stoull(value);
     uint64_t v = 0;
     if(decrement < num) {
         v = std::stoull(value) - decrement;
     }
     value = std::to_string(v);
+    casUnique = cas;
 
     return v;
 }
