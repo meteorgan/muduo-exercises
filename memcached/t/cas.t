@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 use strict;
-use Test::More tests => 43;
+use Test::More tests => 48;
 use FindBin qw($Bin);
 use lib "$Bin/lib";
 use MemcachedTest;
@@ -70,7 +70,7 @@ is(scalar <$sock>, "NOT_FOUND\r\n", "cas failed, foo does not exist");
 
 # cas empty
 print $sock "cas foo 0 0 6 \r\nbarva2\r\n";
-is(scalar <$sock>, "ERROR\r\n", "cas empty, throw error");
+is(scalar <$sock>, "CLIENT_ERROR bad command line format\r\n", "cas empty, throw error");
 # cant parse barval2\r\n
 is(scalar <$sock>, "ERROR\r\n", "error out on barval2 parsing");
 
@@ -152,7 +152,20 @@ is(scalar <$sock>, "1\r\n", "incr worked");
 print $sock "gets bug15\r\n";
 ok(scalar <$sock> =~ /VALUE bug15 0 1 (\d+)\r\n/, "gets bug15 regexp success");
 my $next_bug15_cas = $1;
-is(scalar <$sock>, "1\r\n", "gets bug15 data is 0");
+is(scalar <$sock>, "1\r\n", "gets bug15 data is 1");
 is(scalar <$sock>, "END\r\n","gets bug15 END");
 
 ok($bug15_cas != $next_bug15_cas, "CAS changed");
+
+# Decrement
+print $sock "decr bug15 1\r\n";
+is(scalar <$sock>, "0\r\n", "decr worked");
+
+# Validate a changed CAS
+print $sock "gets bug15\r\n";
+ok(scalar <$sock> =~ /VALUE bug15 0 1 (\d+)\r\n/, "gets bug15 regexp success");
+my $decr_bug15_cas = $1;
+is(scalar <$sock>, "0\r\n", "gets bug15 data is 0");
+is(scalar <$sock>, "END\r\n","gets bug15 END");
+
+ok($next_bug15_cas != $decr_bug15_cas, "CAS changed");

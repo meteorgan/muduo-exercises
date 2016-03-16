@@ -11,7 +11,7 @@ use vars qw(@EXPORT);
 use Cwd;
 my $builddir = getcwd;
 
-$ENV{'T_MEMD_USE_DAEMON'} = '127.0.0.1:11211';
+$ENV{'T_MEMD_USE_DAEMON'} = '127.0.0.1:11212';
 
 @EXPORT = qw(new_memcached sleep mem_get_is mem_gets mem_gets_is mem_stats
              supports_sasl free_port);
