@@ -226,6 +226,14 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                 else if(!isUint32(tokens[2])) {
                     conn->send(invalidExptime);
                 }
+                else {
+                    if(memServer->exists(tokens[1])) {
+                        memServer->touch(tokens[1], tokens[2]);
+                    }
+                    else {
+                        conn->send(notFound);
+                    }
+                }
             }
             else if(tokens[0] == "stats") {
                 if(tokens.size() != 1) {
