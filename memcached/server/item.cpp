@@ -9,6 +9,7 @@ Item::Item(const std::string& key, const std::string& value,
 }
 
 void Item::setExpireTimestamp(uint32_t expireTime) {
+    this->expireTime = expireTime;
     if(expireTime > maxExpireTime) {
         expireTimestamp = expireTime;
     }
@@ -44,7 +45,7 @@ void Item::prepend(const std::string& pre, uint64_t cas) {
 
 bool Item::isExpire() {
     uint32_t current = static_cast<uint32_t>(muduo::Timestamp::now().secondsSinceEpoch());
-    return (current >= expireTimestamp);
+    return (expireTime != 0 && current >= expireTimestamp);
 }
 
 // 相加后溢出(回绕)
