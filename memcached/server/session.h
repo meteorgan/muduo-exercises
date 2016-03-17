@@ -11,7 +11,7 @@ class Session {
     public:
         Session(Memcached* memServer, const muduo::net::TcpConnectionPtr& conn) 
             :memServer(memServer), currentCommand(""), currentKey(""), flags(0), 
-            exptime(0), bytesToRead(0), cas(0) {
+            exptime(0), bytesToRead(0), cas(0), noreply(false) {
                 conn->setMessageCallback(boost::bind(&Session::onMessage, this, _1, _2, _3));
         }
 
@@ -34,6 +34,7 @@ class Session {
         const std::string maxUint32 = "4294967296";
         const std::string maxUint16 = "65536";
 
+        const std::string NOREPLY = "noreply";
         const std::string nonExistentCommand = "ERROR\r\n";
         const std::string badFormat = "CLIENT_ERROR bad command line format\r\n";
         const std::string nonNumeric = "CLIENT_ERROR cannot increment or decrement non-numeric value\r\n";
@@ -46,6 +47,7 @@ class Session {
         const std::string end = "END\r\n";
         const std::string deleted = "DELETED\r\n";
         const std::string touched = "TOUCHED\r\n";
+        const std::string deleteArgumentError = "CLIENT_ERROR bad command line format.  Usage: delete <key> [noreply]\r\n";
 
         Memcached* memServer;
 
@@ -55,6 +57,7 @@ class Session {
         uint32_t exptime;
         uint32_t bytesToRead;
         uint64_t cas;
+        bool noreply;
 };
 
 #endif

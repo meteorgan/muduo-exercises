@@ -15,65 +15,87 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
 
         if(currentCommand != "") {
             if(currentCommand == "add") {
+                std::string result;
                 if(memServer->exists(currentKey)) {
-                    conn->send(notStored);
+                    result = notStored;
                 }
                 else {
                     memServer->set(currentKey, request, flags, exptime);
-                    conn->send(stored);
+                    result = stored;
+                }
+                if(!noreply) {
+                    conn->send(result);
                 }
             }
             else if(currentCommand == "set") {
                 memServer->set(currentKey, request, flags, exptime);
-                conn->send(stored);
-            }
-            else if(currentCommand == "replace") {
-                if(memServer->exists(currentKey)) {
-                    memServer->set(currentKey, request, flags, exptime);
+                if(!noreply) {
                     conn->send(stored);
                 }
+            }
+            else if(currentCommand == "replace") {
+                std::string result;
+                if(memServer->exists(currentKey)) {
+                    memServer->set(currentKey, request, flags, exptime);
+                    result = stored;
+                }
                 else {
-                    conn->send(notStored);
+                    result = notStored;
+                }
+                if(!noreply) {
+                    conn->send(result);
                 }
             }
             else if(currentCommand == "append") {
+                std::string result;
                 if(memServer->exists(currentKey)) {
                     memServer->append(currentKey, request);
-                    conn->send(stored);
+                    result = stored;
                 }
                 else {
-                    conn->send(notStored);
+                    result = notStored;
                 }
-                    
+                if(!noreply) {
+                    conn->send(result);
+                }
             }
             else if(currentCommand == "prepend") {
+                std::string result;
                if(memServer->exists(currentKey)) {
                    memServer->prepend(currentKey, request);
-                   conn->send(stored);
+                   result = stored;
                }
                else {
-                   conn->send(notStored);
+                   result = notStored;
+               }
+               if(!noreply) {
+                   conn->send(result);
                }
             }
             else if(currentCommand == "cas") {
+                std::string result;
                 if(memServer->exists(currentKey)) {
                     std::shared_ptr<Item> item = memServer->get(currentKey);
                     uint64_t oldCas = item->getCas();
                     if(oldCas != cas) {
-                        conn->send(exists);
+                        result = exists;
                     }
                     else {
                         memServer->set(currentKey, request, flags, exptime);
-                        conn->send(stored);
+                        result = stored;
                     }
                 }
                 else {
-                    conn->send(notFound);
+                    result = notFound;
+                }
+                if(!noreply) {
+                    conn->send(result);
                 }
             }
             else {
                 conn->send(nonExistentCommand);
             }
+
             currentCommand = "";
             currentKey = "";
         }
@@ -163,21 +185,31 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                 }
             }
             else if(tokens[0] == "delete") {
-                if(tokens.size() != 2) {
+                if(tokens.size() < 2) {
                     conn->send(nonExistentCommand);
                 }
+                else if(tokens.size() >= 3) {
+                    if(tokens[2] != NOREPLY || tokens.size() > 3) {
+                        conn->send(deleteArgumentError);
+                    }
+                }
                 else {
+                    noreply = tokens.size() >= 3 && tokens[2] == NOREPLY;
                     if(!memServer->exists(tokens[1])) {
-                        conn->send(notFound);
+                        if(!noreply) {
+                            conn->send(notFound);
+                        }
                     }
                     else {
                         memServer->deleteKey(tokens[1]);
-                        conn->send(deleted);
+                        if(!noreply) {
+                            conn->send(deleted);
+                        }
                     }
                 }
             }
-            else if(tokens[0] == "incr") {
-                if(tokens.size() != 3) {
+            else if(tokens[0] == "incr") {  //忽略多余的参数
+                if(tokens.size() < 3) {
                     conn->send(nonExistentCommand);
                 }
                 else if(!isUint64(tokens[2])) {
@@ -193,12 +225,15 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                     }
                     else {
                         uint64_t result = memServer->incr(tokens[1], tokens[2]);
-                        conn->send(std::to_string(result) + "\r\n");
+                        noreply = tokens.size() > 3 && tokens[3] == NOREPLY;
+                        if(!noreply) {
+                            conn->send(std::to_string(result) + "\r\n");
+                        }
                     }
                 }
             }
             else if(tokens[0] == "decr") {
-                if(tokens.size() != 3) {
+                if(tokens.size() < 3) {
                     conn->send(nonExistentCommand);
                 }
                 else if(!isUint64(tokens[2])) {
@@ -214,24 +249,33 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                     }
                     else {
                         uint64_t result = memServer->decr(tokens[1], tokens[2]);
-                        conn->send(std::to_string(result) + "\r\n");
+                        noreply = tokens.size() > 3 && tokens[3] == NOREPLY;
+                        if(!noreply) {
+                            conn->send(std::to_string(result) + "\r\n");
+                        }
                     }
                 }
             }
             else if(tokens[0] == "touch") {
-                if(tokens.size() != 3) {
+                if(tokens.size() < 3) {
                     conn->send(nonExistentCommand);
                 }
                 else if(!isUint32(tokens[2])) {
                     conn->send(invalidExptime);
                 }
                 else {
+                    noreply = tokens.size() > 3 && tokens[3] == NOREPLY;
+
                     if(memServer->exists(tokens[1])) {
                         memServer->touch(tokens[1], tokens[2]);
-                        conn->send(touched);
+                        if(!noreply) {
+                            conn->send(touched);
+                        }
                     }
                     else {
-                        conn->send(notFound);
+                        if(!noreply) {
+                            conn->send(notFound);
+                        }
                     }
                 }
             }
@@ -293,7 +337,7 @@ bool Session::isUint(const std::string& str, const std::string& uint) {
 bool Session::validateStorageCommand(const std::vector<std::string>& tokens, size_t size, 
         const muduo::net::TcpConnectionPtr& conn) {
     bool result = true;
-    if(tokens.size() != size) {
+    if(tokens.size() < size) {
         conn->send(nonExistentCommand);
         result = false;
     }
@@ -302,6 +346,7 @@ bool Session::validateStorageCommand(const std::vector<std::string>& tokens, siz
         if(size == 6) {
             result = result && isUint64(tokens[5]);
         }
+        noreply = tokens.size() > size && tokens[size] == NOREPLY;
         if(!result) {
             conn->send(badFormat);
         }
