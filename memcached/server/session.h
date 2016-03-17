@@ -11,7 +11,7 @@ class Session {
     public:
         Session(Memcached* memServer, const muduo::net::TcpConnectionPtr& conn) 
             :memServer(memServer), currentCommand(""), currentKey(""), flags(0), 
-            exptime(0), bytesToRead(0), cas(0), noreply(false) {
+            expireTime(0), bytesToRead(0), cas(0), noreply(false), flushTime(0) {
                 conn->setMessageCallback(boost::bind(&Session::onMessage, this, _1, _2, _3));
         }
 
@@ -48,8 +48,12 @@ class Session {
         bool isUint(const std::string& str, const std::string& uint);
 
         bool validateStorageCommand(const std::vector<std::string>& tokens, size_t size, const muduo::net::TcpConnectionPtr& conn);
-        void setStorageCommandInfo(const std::vector<std::string>& tokens);
+        void setStorageCommandInfo(const std::vector<std::string>& tokens, size_t size);
 
+        uint32_t convertExpireTime(uint32_t exptime);
+        uint32_t toExpireTimestamp(uint32_t exptime);
+
+        const uint32_t maxExpireTime = 2592000;
         const std::string maxUint64 = "18446744073709551616";
         const std::string maxUint32 = "4294967296";
         const std::string maxUint16 = "65536";
@@ -76,10 +80,11 @@ class Session {
         std::string currentCommand;
         std::string currentKey;
         uint16_t flags;
-        uint32_t exptime;
+        uint32_t expireTime;
         uint32_t bytesToRead;
         uint64_t cas;
         bool noreply;
+        uint32_t flushTime;
 };
 
 #endif

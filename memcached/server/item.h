@@ -31,15 +31,11 @@ class Item {
         uint64_t getCas() { return casUnique; }
 
     private:
-        void setExpireTimestamp(uint32_t expireTime);
-
-        const uint32_t maxExpireTime = 2592000;
         std::string key;
         std::string value;
         uint16_t flags;
-        uint32_t expireTime;
+        uint32_t expireTime; // using timestamp
         uint64_t casUnique;
-        uint32_t expireTimestamp;
 };
 
 #endif

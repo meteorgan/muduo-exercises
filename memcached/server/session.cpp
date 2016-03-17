@@ -39,7 +39,7 @@ void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
             result = notStored;
         }
         else {
-            memServer->set(currentKey, request, flags, exptime);
+            memServer->set(currentKey, request, flags, expireTime);
             result = stored;
         }
         if(!noreply) {
@@ -47,7 +47,7 @@ void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
         }
     }
     else if(currentCommand == "set") {
-        memServer->set(currentKey, request, flags, exptime);
+        memServer->set(currentKey, request, flags, expireTime);
         if(!noreply) {
             conn->send(stored);
         }
@@ -55,7 +55,7 @@ void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
     else if(currentCommand == "replace") {
         std::string result;
         if(memServer->exists(currentKey)) {
-            memServer->set(currentKey, request, flags, exptime);
+            memServer->set(currentKey, request, flags, expireTime);
             result = stored;
         }
         else {
@@ -100,7 +100,7 @@ void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
                 result = exists;
             }
             else {
-                memServer->set(currentKey, request, flags, exptime);
+                memServer->set(currentKey, request, flags, expireTime);
                 result = stored;
             }
         }
@@ -122,32 +122,32 @@ void Session::handleCommand(const muduo::net::TcpConnectionPtr& conn,
     boost::split(tokens, request, boost::is_any_of(" "));
     if(tokens[0] == "add") {
         if(validateStorageCommand(tokens, 5, conn)) {
-            setStorageCommandInfo(tokens);
+            setStorageCommandInfo(tokens, 5);
         }
     }
     else if(tokens[0] == "set") {
         if(validateStorageCommand(tokens, 5, conn)) {
-            setStorageCommandInfo(tokens);
+            setStorageCommandInfo(tokens, 5);
         }
     }
     else if(tokens[0] == "replace") {
         if(validateStorageCommand(tokens, 5, conn)) {
-            setStorageCommandInfo(tokens);
+            setStorageCommandInfo(tokens, 5);
         }
     }
     else if(tokens[0] == "append") {
         if(validateStorageCommand(tokens, 5, conn)) {
-            setStorageCommandInfo(tokens);
+            setStorageCommandInfo(tokens, 5);
         }
     }
     else if(tokens[0] == "prepend") {
         if(validateStorageCommand(tokens, 5, conn)) {
-            setStorageCommandInfo(tokens);
+            setStorageCommandInfo(tokens, 5);
         }
     }
     else if(tokens[0] == "cas") {
         if(validateStorageCommand(tokens, 6, conn)) {
-            setStorageCommandInfo(tokens);
+            setStorageCommandInfo(tokens, 6);
         }
     }
     else if(tokens[0] == "get") {
@@ -282,7 +282,8 @@ void Session::handleIncr(const muduo::net::TcpConnectionPtr& conn,
             response = nonNumeric;
         }
         else {
-            uint64_t result = memServer->incr(tokens[1], tokens[2]);
+            uint64_t value = std::stoull(tokens[2]);
+            uint64_t result = memServer->incr(tokens[1], value);
             noreply = tokens.size() > 3 && tokens[3] == NOREPLY;
             response= std::to_string(result) + "\r\n";
         }
@@ -311,7 +312,8 @@ void Session::handleDecr(const muduo::net::TcpConnectionPtr& conn,
             response = nonNumeric;
         }
         else {
-            uint64_t result = memServer->decr(tokens[1], tokens[2]);
+            uint64_t value = std::stoull(tokens[2]);
+            uint64_t result = memServer->decr(tokens[1], value);
             noreply = tokens.size() > 3 && tokens[3] == NOREPLY;
             response = std::to_string(result) + "\r\n";
         }
@@ -335,7 +337,9 @@ void Session::handleTouch(const muduo::net::TcpConnectionPtr& conn,
         noreply = tokens.size() > 3 && tokens[3] == NOREPLY;
 
         if(memServer->exists(tokens[1])) {
-            memServer->touch(tokens[1], tokens[2]);
+            uint32_t t = static_cast<uint32_t>(std::stoul(tokens[2]));
+            uint32_t exp = convertExpireTime(t);
+            memServer->touch(tokens[1], exp);;
             response = touched;
         }
         else {
@@ -357,11 +361,12 @@ void Session::handleStats(const muduo::net::TcpConnectionPtr& conn,
 void Session::handleFlushAll(const muduo::net::TcpConnectionPtr& conn,
         const std::vector<std::string>& tokens) {
     noreply = false;
-    exptime = 0;
+    uint32_t exptime = 0;
     std::string result("");
     if(tokens.size() >= 2) {
         if(isUint32(tokens[1])) {
-            exptime = std::stoul(tokens[1]);
+            uint32_t t = static_cast<uint32_t>(std::stoul(tokens[1]));
+            exptime = toExpireTimestamp(t);
             noreply = tokens.size() >= 3 && tokens[2] == NOREPLY;
             memServer->flush_all(exptime);
             result = OK;
@@ -383,6 +388,7 @@ void Session::handleFlushAll(const muduo::net::TcpConnectionPtr& conn,
     if(!noreply) {
         conn->send(result);
     }
+    flushTime = exptime;   // override flushTime before
 }
 
 bool Session::isAllNumber(std::vector<std::string>::const_iterator begin, 
@@ -436,8 +442,9 @@ bool Session::validateStorageCommand(const std::vector<std::string>& tokens, siz
         result = false;
     }
     else {
+        // flags expireTime bytes [cas] [norely]
         result = isUint16(tokens[2]) && isUint32(tokens[3]) && isUint32(tokens[4]);
-        if(size == 6) {
+        if(size == 6) { // cas
             result = result && isUint64(tokens[5]);
         }
         noreply = tokens.size() > size && tokens[size] == NOREPLY;
@@ -449,13 +456,34 @@ bool Session::validateStorageCommand(const std::vector<std::string>& tokens, siz
     return result;
 }
 
-void Session::setStorageCommandInfo(const std::vector<std::string>& tokens) {
+void Session::setStorageCommandInfo(const std::vector<std::string>& tokens, size_t size) {
     currentCommand = tokens[0];
     currentKey = tokens[1];
-    flags = stoul(tokens[2]);
-    exptime = stoul(tokens[3]);
-    bytesToRead = stoul(tokens[4]);
-    if(tokens.size() == 6) {
+    flags = static_cast<uint16_t>(stoul(tokens[2]));
+    uint32_t t = static_cast<uint32_t>(std::stoul(tokens[3]));
+    expireTime = convertExpireTime(t);
+    bytesToRead = static_cast<uint32_t>(stoul(tokens[4]));
+    if(size == 6) {
         cas = stoull(tokens[5]);
     }
+}
+
+uint32_t Session::convertExpireTime(uint32_t expt) {
+    uint32_t time = toExpireTimestamp(expt);
+    uint32_t now = static_cast<uint32_t>(muduo::Timestamp::now().secondsSinceEpoch());
+    if(flushTime > now && (expt > flushTime || expt == 0)) {
+       time = flushTime; 
+    }
+
+    return time;
+}
+
+// 0 means forever
+uint32_t Session::toExpireTimestamp(uint32_t expt) {
+    uint32_t time = expt;
+    if(expt != 0 && expt <= maxExpireTime) {
+        time = static_cast<uint32_t>(muduo::Timestamp::now().secondsSinceEpoch()) + expt;
+    }
+
+    return time;
 }

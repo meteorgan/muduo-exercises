@@ -83,9 +83,8 @@ void Memcached::deleteKey(const std::string& key) {
     items.erase(key);
 }
 
-uint64_t Memcached::incr(const std::string& key, const std::string& value) {
+uint64_t Memcached::incr(const std::string& key, uint64_t increment) {
     ++casUnique;
-    uint64_t increment = std::stoull(value);
     auto iter = items.find(key);
     assert(iter != items.end());
     uint64_t result = iter->second->incr(increment, casUnique);
@@ -93,9 +92,8 @@ uint64_t Memcached::incr(const std::string& key, const std::string& value) {
     return result;
 }
 
-uint64_t Memcached::decr(const std::string& key, const std::string& value) {
+uint64_t Memcached::decr(const std::string& key, uint64_t decrement) {
     ++casUnique;
-    uint64_t decrement = std::stoull(value);
     auto iter = items.find(key);
     assert(iter != items.end());
     uint64_t result = iter->second->decr(decrement, casUnique);
@@ -103,8 +101,7 @@ uint64_t Memcached::decr(const std::string& key, const std::string& value) {
     return result;
 }
 
-void Memcached::touch(const std::string& key, const std::string& value) {
-    uint32_t exptime = std::stoul(value);
+void Memcached::touch(const std::string& key, uint32_t exptime) {
     auto iter = items.find(key);
     assert(iter != items.end());
     iter->second->touch(exptime);

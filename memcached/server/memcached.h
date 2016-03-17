@@ -28,11 +28,11 @@ class Memcached {
 
         void deleteKey(const std::string& key);
 
-        uint64_t incr(const std::string& key, const std::string& value);
+        uint64_t incr(const std::string& key, uint64_t value);
 
-        uint64_t decr(const std::string& key, const std::string& value);
+        uint64_t decr(const std::string& key, uint64_t value);
 
-        void touch(const std::string& key, const std::string& exptime);
+        void touch(const std::string& key, uint32_t exptime);
 
         void flush_all(uint32_t exptime = 0);
 
