@@ -9,23 +9,25 @@
 void Session::onMessage(const muduo::net::TcpConnectionPtr& conn, 
         muduo::net::Buffer* buffer, muduo::Timestamp time) {
 
-    // read command
-    while(currentCommand == "" && buffer->findCRLF()) {
-        const char* crlf = buffer->findCRLF();
-        std::string request(buffer->peek(), crlf);
-        buffer->retrieveUntil(crlf + 2);
+    while(buffer->findCRLF()) {
+        // read command
+        if(currentCommand == "") {
+            const char* crlf = buffer->findCRLF();
+            std::string request(buffer->peek(), crlf);
+            buffer->retrieveUntil(crlf + 2);
 
-        handleCommand(conn, request);
-    }
+            handleCommand(conn, request);
+        }
 
-    // read data chunk 
-    if(currentCommand != "" && buffer->readableBytes() >= bytesToRead) {
-        std::string request(buffer->peek(), bytesToRead);        
-        buffer->retrieve(bytesToRead);
+        // read data chunk 
+        if(currentCommand != "" && buffer->readableBytes() >= bytesToRead) {
+            std::string request(buffer->peek(), bytesToRead);        
+            buffer->retrieve(bytesToRead+2);
 
-        handleDataChunk(conn, request);
-        currentCommand = "";
-        currentKey = "";
+            handleDataChunk(conn, request);
+            currentCommand = "";
+            currentKey = "";
+        }
     }
 }
 
