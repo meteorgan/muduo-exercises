@@ -9,3 +9,5 @@ Memcached 问题:
 4. value大小的限定
 5. lru实现
 6. 参数解析？多余参数处理
+7. 如何处理过长的输入(输入字符数多余要求的字符), session onMessage逻辑
+8. pipeline支持
