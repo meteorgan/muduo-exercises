@@ -284,6 +284,35 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
                     conn->send(nonExistentCommand);
                 }
             }
+            else if(tokens[0] == "flush_all") {
+                noreply = false;
+                exptime = 0;
+                std::string result("");
+                if(tokens.size() >= 2) {
+                    if(isUint32(tokens[1])) {
+                        exptime = std::stoul(tokens[1]);
+                        noreply = tokens.size() >= 3 && tokens[2] == NOREPLY;
+                        memServer->flush_all(exptime);
+                        result = OK;
+                    }
+                    else if(tokens[1] == NOREPLY) {
+                        noreply = true;
+                        memServer->flush_all(exptime);
+                        result = OK;
+                    }
+                    else {
+                       result = nonExistentCommand; 
+                    }
+                }
+                else {
+                    memServer->flush_all(exptime);
+                    result = OK;
+                }
+
+                if(!noreply) {
+                    conn->send(result);
+                }
+            }
             else if(tokens[0] == "quit") {
                 conn->shutdown();
             }

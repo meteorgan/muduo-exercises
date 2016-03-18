@@ -35,6 +35,7 @@ class Session {
         const std::string maxUint16 = "65536";
 
         const std::string NOREPLY = "noreply";
+        const std::string OK = "OK\r\n";
         const std::string nonExistentCommand = "ERROR\r\n";
         const std::string badFormat = "CLIENT_ERROR bad command line format\r\n";
         const std::string nonNumeric = "CLIENT_ERROR cannot increment or decrement non-numeric value\r\n";

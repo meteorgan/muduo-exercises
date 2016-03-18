@@ -34,6 +34,8 @@ class Memcached {
 
         void touch(const std::string& key, const std::string& exptime);
 
+        void flush_all(uint32_t exptime = 0);
+
         void stats();
 
         bool exists(const std::string& key);

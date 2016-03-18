@@ -110,6 +110,16 @@ void Memcached::touch(const std::string& key, const std::string& value) {
     iter->second->touch(exptime);
 }
 
+void Memcached::flush_all(uint32_t exptime) {
+    uint32_t t = static_cast<uint32_t>(muduo::Timestamp::now().secondsSinceEpoch()) - 1;
+    if(exptime != 0) {
+        t = exptime;
+    }
+    for(auto& item : items) {
+        item.second->touch(t);
+    }
+}
+
 bool Memcached::exists(const std::string& key) {
     auto iter = items.find(key);
     if(iter == items.end()) {
