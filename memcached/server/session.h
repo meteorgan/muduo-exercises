@@ -15,6 +15,26 @@ class Session {
                 conn->setMessageCallback(boost::bind(&Session::onMessage, this, _1, _2, _3));
         }
 
+        void handleCommand(const muduo::net::TcpConnectionPtr& conn, const std::string& request);
+
+        void handleDataChunk(const muduo::net::TcpConnectionPtr& conn, const std::string& request);
+
+        void handleGet(const muduo::net::TcpConnectionPtr& conn, const std::vector<std::string>& tokens);
+
+        void handleGetMulti(const muduo::net::TcpConnectionPtr& conn, const std::vector<std::string>& tokens);
+
+        void handleDelete(const muduo::net::TcpConnectionPtr& conn, const std::vector<std::string>& tokens);
+
+        void handleIncr(const muduo::net::TcpConnectionPtr& conn, const std::vector<std::string>& tokens);
+
+        void handleDecr(const muduo::net::TcpConnectionPtr& conn, const std::vector<std::string>& tokens);
+
+        void handleTouch(const muduo::net::TcpConnectionPtr& conn, const std::vector<std::string>& tokens);
+
+        void handleStats(const muduo::net::TcpConnectionPtr& conn, const std::vector<std::string>& tokens);
+
+        void handleFlushAll(const muduo::net::TcpConnectionPtr& conn, const std::vector<std::string>& tokens);
+
     private:
         void onMessage(const muduo::net::TcpConnectionPtr& conn,
                 muduo::net::Buffer* buffer, muduo::Timestamp time);
@@ -49,6 +69,7 @@ class Session {
         const std::string deleted = "DELETED\r\n";
         const std::string touched = "TOUCHED\r\n";
         const std::string deleteArgumentError = "CLIENT_ERROR bad command line format.  Usage: delete <key> [noreply]\r\n";
+        const std::string badChunk = "CLIENT_ERROR bad data chunk\r\n";
 
         Memcached* memServer;
 
