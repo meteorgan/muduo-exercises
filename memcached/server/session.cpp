@@ -98,14 +98,20 @@ void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
             uint64_t oldCas = item->getCas();
             if(oldCas != cas) {
                 result = exists;
+
+                memServer->memStats().casBadValCount++;
             }
             else {
                 memServer->set(currentKey, request, flags, expireTime);
                 result = stored;
+
+                memServer->memStats().casHitCount++;
             }
         }
         else {
             result = notFound;
+
+            memServer->memStats().casMissCount++;
         }
         if(!noreply) {
             conn->send(result);
@@ -127,6 +133,8 @@ void Session::handleCommand(const muduo::net::TcpConnectionPtr& conn,
     }
     else if(tokens[0] == "set") {
         if(validateStorageCommand(tokens, 5, conn)) {
+            memServer->memStats().cmdSetCount++;
+
             setStorageCommandInfo(tokens, 5);
         }
     }
@@ -202,8 +210,14 @@ void Session::handleGet(const muduo::net::TcpConnectionPtr& conn,
                     + " " + std::to_string(size) + "\r\n";
                 conn->send(line);
                 conn->send(value + "\r\n");
+
+                memServer->memStats().getHitCount++;
+            }
+            else {
+                memServer->memStats().getMissCount++;
             }
             ++iter;
+            memServer->memStats().cmdGetCount++;
         }
         conn->send(end);
     }
@@ -234,7 +248,7 @@ void Session::handleGetMulti(const muduo::net::TcpConnectionPtr& conn,
             }
             ++iter;
         }
-            conn->send(end);
+        conn->send(end);
     }
 }
 
@@ -252,10 +266,14 @@ void Session::handleDelete(const muduo::net::TcpConnectionPtr& conn,
         noreply = tokens.size() == 3 && tokens[2] == NOREPLY;
         if(!memServer->exists(tokens[1])) {
             response = notFound;
+
+            memServer->memStats().deleteMissCount++;
         }
         else {
             memServer->deleteKey(tokens[1]);
             response = deleted;
+
+            memServer->memStats().deleteHitCount++;
         }
     }
     if(!noreply) {
@@ -275,6 +293,8 @@ void Session::handleIncr(const muduo::net::TcpConnectionPtr& conn,
     }
     else if(!memServer->exists(tokens[1])) {
         response = notFound;
+
+        memServer->memStats().incrMissCount++;
     }
     else {
         std::shared_ptr<Item> item = memServer->get(tokens[1]);
@@ -286,6 +306,8 @@ void Session::handleIncr(const muduo::net::TcpConnectionPtr& conn,
             uint64_t result = memServer->incr(tokens[1], value);
             noreply = tokens.size() > 3 && tokens[3] == NOREPLY;
             response= std::to_string(result) + "\r\n";
+
+            memServer->memStats().incrHitCount++;
         }
     }
     if(!noreply) {
@@ -305,6 +327,8 @@ void Session::handleDecr(const muduo::net::TcpConnectionPtr& conn,
     }
     else if(!memServer->exists(tokens[1])) {
         response = notFound;
+
+        memServer->memStats().decrMissCount++;
     }
     else {
         std::shared_ptr<Item> item = memServer->get(tokens[1]);
@@ -316,6 +340,8 @@ void Session::handleDecr(const muduo::net::TcpConnectionPtr& conn,
             uint64_t result = memServer->decr(tokens[1], value);
             noreply = tokens.size() > 3 && tokens[3] == NOREPLY;
             response = std::to_string(result) + "\r\n";
+
+            memServer->memStats().decrMissCount++;
         }
     }
     if(!noreply) {
@@ -341,10 +367,15 @@ void Session::handleTouch(const muduo::net::TcpConnectionPtr& conn,
             uint32_t exp = convertExpireTime(t);
             memServer->touch(tokens[1], exp);;
             response = touched;
+
+            memServer->memStats().touchHitCount++;
         }
         else {
             response = notFound;
+
+            memServer->memStats().touchMissCount++;
         }
+        memServer->memStats().cmdTouchCount++;
     }
     if(!noreply) {
         conn->send(response);
@@ -355,6 +386,8 @@ void Session::handleStats(const muduo::net::TcpConnectionPtr& conn,
         const std::vector<std::string>& tokens) {
     if(tokens.size() != 1) {
         conn->send(nonExistentCommand);
+    }
+    else {
     }
 }
 
@@ -385,6 +418,7 @@ void Session::handleFlushAll(const muduo::net::TcpConnectionPtr& conn,
         result = OK;
     }
 
+    memServer->memStats().cmdFlushCount++;
     if(!noreply) {
         conn->send(result);
     }

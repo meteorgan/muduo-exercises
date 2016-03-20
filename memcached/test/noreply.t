@@ -15,8 +15,6 @@ my $sock = $server->sock;
 print $sock "flush_all noreply\r\n";
 print $sock "flush_all 0 noreply\r\n";
 
-#print $sock "verbosity 0 noreply\r\n";
-
 print $sock "add noreply:foo 0 0 1 noreply\r\n1\r\n";
 mem_get_is($sock, "noreply:foo", "1");
 
@@ -44,4 +42,3 @@ mem_get_is($sock, "noreply:foo", "7");
 
 print $sock "delete noreply:foo noreply\r\n";
 mem_get_is($sock, "noreply:foo");
-

@@ -3,8 +3,11 @@
 
 #include "muduo/net/TcpConnection.h"
 #include "muduo/net/TcpServer.h"
+#include "muduo/net/EventLoopThread.h"
+#include "muduo/net/inspect/Inspector.h"
 
 #include "item.h"
+#include "stat.h"
 
 #include <map>
 
@@ -40,13 +43,19 @@ class Memcached {
 
         bool exists(const std::string& key);
 
+        MemcachedStat& memStats();
+
     private:
         void onConnection(const muduo::net::TcpConnectionPtr& conn);
 
         muduo::net::InetAddress listenAddr;
         uint64_t casUnique;
         muduo::net::TcpServer server;
-    
+
+        muduo::net::EventLoopThread inspectorLoop;
+        muduo::net::Inspector inspector; 
+        MemcachedStat stat;
+
         std::map<std::string, std::unique_ptr<Session>> sessions;
         std::map<std::string, std::shared_ptr<Item>> items;
 };
