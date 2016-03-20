@@ -15,7 +15,7 @@
 class MemcachedStat {
     public:
         MemcachedStat()
-            : startTime(muduo::ProcessInfo::startTime().secondsSinceEpoch()),
+            : startTime(static_cast<uint32_t>(muduo::ProcessInfo::startTime().secondsSinceEpoch())),
         currItems(0), totalItems(0), bytesUsed(0), currConnections(0), totalConnections(0), 
         cmdGetCount(0), cmdSetCount(0),
         cmdFlushCount(0), cmdTouchCount(0), getHitCount(0), getMissCount(0), 
@@ -83,7 +83,52 @@ class MemcachedStat {
             touchMissCount++; 
         }
 
-        std::string report() const {
+        void addCasHitCount() {
+            std::lock_guard<std::mutex> lock(mtx);
+            casHitCount++;
+        }
+
+        void addCasMissCount() {
+            std::lock_guard<std::mutex> lock(mtx);
+            casMissCount++;
+        }
+
+        void addCasBadValCount() {
+            std::lock_guard<std::mutex> lock(mtx);
+            casBadValCount++;
+        }
+
+        void addDeleteHitCount() {
+            std::lock_guard<std::mutex> lock(mtx);
+            deleteHitCount++;
+        }
+
+        void addDeleteMissCount() {
+            std::lock_guard<std::mutex> lock(mtx);
+            deleteMissCount++;
+        }
+
+        void addIncrHitCount() {
+            std::lock_guard<std::mutex> lock(mtx);
+            incrHitCount++;
+        }
+
+        void addIncrMissCount() {
+            std::lock_guard<std::mutex> lock(mtx);
+            incrMissCount++;
+        }
+
+        void addDecrHitCount() {
+            std::lock_guard<std::mutex> lock(mtx);
+            decrHitCount++;
+        }
+
+        void addDecrMissCount() {
+            std::lock_guard<std::mutex> lock(mtx);
+            decrMissCount++;
+        }
+
+        muduo::string report() const {
             static const std::string prefix = "STAT ";
             std::lock_guard<std::mutex> lock(mtx);
             std::stringstream fmt;
@@ -116,7 +161,7 @@ class MemcachedStat {
             fmt << prefix << "curr_items " << currItems << "\r\n";
             fmt << prefix << "total_items " << totalItems << "\r\n";
             
-            return fmt.str();
+            return muduo::string(fmt.str().c_str());
         }
 
     private:

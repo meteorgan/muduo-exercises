@@ -99,19 +99,19 @@ void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
             if(oldCas != cas) {
                 result = exists;
 
-                memServer->memStats().casBadValCount++;
+                memServer->memStats().addCasBadValCount();
             }
             else {
                 memServer->set(currentKey, request, flags, expireTime);
                 result = stored;
 
-                memServer->memStats().casHitCount++;
+                memServer->memStats().addCasHitCount();
             }
         }
         else {
             result = notFound;
 
-            memServer->memStats().casMissCount++;
+            memServer->memStats().addCasMissCount();
         }
         if(!noreply) {
             conn->send(result);
@@ -133,7 +133,7 @@ void Session::handleCommand(const muduo::net::TcpConnectionPtr& conn,
     }
     else if(tokens[0] == "set") {
         if(validateStorageCommand(tokens, 5, conn)) {
-            memServer->memStats().cmdSetCount++;
+            memServer->memStats().addCmdSetCount();
 
             setStorageCommandInfo(tokens, 5);
         }
@@ -211,13 +211,13 @@ void Session::handleGet(const muduo::net::TcpConnectionPtr& conn,
                 conn->send(line);
                 conn->send(value + "\r\n");
 
-                memServer->memStats().getHitCount++;
+                memServer->memStats().addCmdGetHitCount();
             }
             else {
-                memServer->memStats().getMissCount++;
+                memServer->memStats().addCmdGetMissCount();
             }
             ++iter;
-            memServer->memStats().cmdGetCount++;
+            memServer->memStats().addCmdGetCount();
         }
         conn->send(end);
     }
@@ -267,13 +267,13 @@ void Session::handleDelete(const muduo::net::TcpConnectionPtr& conn,
         if(!memServer->exists(tokens[1])) {
             response = notFound;
 
-            memServer->memStats().deleteMissCount++;
+            memServer->memStats().addDeleteMissCount();
         }
         else {
             memServer->deleteKey(tokens[1]);
             response = deleted;
 
-            memServer->memStats().deleteHitCount++;
+            memServer->memStats().addDeleteHitCount();
         }
     }
     if(!noreply) {
@@ -294,7 +294,7 @@ void Session::handleIncr(const muduo::net::TcpConnectionPtr& conn,
     else if(!memServer->exists(tokens[1])) {
         response = notFound;
 
-        memServer->memStats().incrMissCount++;
+        memServer->memStats().addIncrMissCount();
     }
     else {
         std::shared_ptr<Item> item = memServer->get(tokens[1]);
@@ -307,7 +307,7 @@ void Session::handleIncr(const muduo::net::TcpConnectionPtr& conn,
             noreply = tokens.size() > 3 && tokens[3] == NOREPLY;
             response= std::to_string(result) + "\r\n";
 
-            memServer->memStats().incrHitCount++;
+            memServer->memStats().addIncrHitCount();
         }
     }
     if(!noreply) {
@@ -328,7 +328,7 @@ void Session::handleDecr(const muduo::net::TcpConnectionPtr& conn,
     else if(!memServer->exists(tokens[1])) {
         response = notFound;
 
-        memServer->memStats().decrMissCount++;
+        memServer->memStats().addDecrMissCount();
     }
     else {
         std::shared_ptr<Item> item = memServer->get(tokens[1]);
@@ -341,7 +341,7 @@ void Session::handleDecr(const muduo::net::TcpConnectionPtr& conn,
             noreply = tokens.size() > 3 && tokens[3] == NOREPLY;
             response = std::to_string(result) + "\r\n";
 
-            memServer->memStats().decrMissCount++;
+            memServer->memStats().addDecrMissCount();
         }
     }
     if(!noreply) {
@@ -368,14 +368,14 @@ void Session::handleTouch(const muduo::net::TcpConnectionPtr& conn,
             memServer->touch(tokens[1], exp);;
             response = touched;
 
-            memServer->memStats().touchHitCount++;
+            memServer->memStats().addCmdTouchHitCount();
         }
         else {
             response = notFound;
 
-            memServer->memStats().touchMissCount++;
+            memServer->memStats().addCmdTouchMissCount();
         }
-        memServer->memStats().cmdTouchCount++;
+        memServer->memStats().addCmdTouchCount();
     }
     if(!noreply) {
         conn->send(response);
@@ -388,6 +388,9 @@ void Session::handleStats(const muduo::net::TcpConnectionPtr& conn,
         conn->send(nonExistentCommand);
     }
     else {
+        muduo::string stats = memServer->memStats().report();
+        stats = stats + end.c_str();
+        conn->send(stats);
     }
 }
 
@@ -418,7 +421,7 @@ void Session::handleFlushAll(const muduo::net::TcpConnectionPtr& conn,
         result = OK;
     }
 
-    memServer->memStats().cmdFlushCount++;
+    memServer->memStats().addCmdFlushCount();
     if(!noreply) {
         conn->send(result);
     }

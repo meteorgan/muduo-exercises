@@ -5,6 +5,7 @@
 #include "muduo/net/TcpServer.h"
 #include "muduo/net/EventLoopThread.h"
 #include "muduo/net/inspect/Inspector.h"
+#include "muduo/net/InetAddress.h"
 
 #include "item.h"
 #include "stat.h"
@@ -54,7 +55,7 @@ class Memcached {
 
         muduo::net::EventLoopThread inspectorLoop;
         muduo::net::Inspector inspector; 
-        MemcachedStat stat;
+        MemcachedStat stats_;
 
         std::map<std::string, std::unique_ptr<Session>> sessions;
         std::map<std::string, std::shared_ptr<Item>> items;
