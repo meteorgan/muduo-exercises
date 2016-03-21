@@ -10,13 +10,14 @@
 #include "item.h"
 #include "stat.h"
 
-#include <map>
+#include <atomic>
+#include <unordered_map>
 
 class Session;
 
 class Memcached {
     public:
-        Memcached(muduo::net::EventLoop* loop, const muduo::net::InetAddress& listenAddr);
+        Memcached(muduo::net::EventLoop* loop, const muduo::net::InetAddress& listenAddr, int threadNum);
 
         void start();
 
@@ -26,9 +27,9 @@ class Memcached {
 
         void prepend(const std::string& key, const std::string& pre);
 
-        std::shared_ptr<Item> get(const std::string& key);
+        std::shared_ptr<const Item> get(const std::string& key);
 
-        std::map<std::string, std::shared_ptr<Item>> get(const std::vector<std::string>& keys);
+        std::map<std::string, std::shared_ptr<const Item>> get(const std::vector<std::string>& keys);
 
         void deleteKey(const std::string& key);
 
@@ -50,15 +51,22 @@ class Memcached {
         void onConnection(const muduo::net::TcpConnectionPtr& conn);
 
         muduo::net::InetAddress listenAddr;
-        uint64_t casUnique;
+        std::atomic<uint64_t> casUnique;
+        int numThread;
         muduo::net::TcpServer server;
 
         muduo::net::EventLoopThread inspectorLoop;
         muduo::net::Inspector inspector; 
         MemcachedStat stats_;
 
-        std::map<std::string, std::unique_ptr<Session>> sessions;
-        std::map<std::string, std::shared_ptr<Item>> items;
+        std::unordered_map<std::string, std::unique_ptr<Session>> sessions;
+
+        std::hash<std::string> hashFunc;
+        const static int kShards = 4096;
+        struct ItemsWithLock {
+            std::mutex itemLock;
+            std::unordered_map<std::string, std::shared_ptr<Item>> items;
+        } shards[kShards];
 };
 
 #endif

@@ -75,6 +75,23 @@ class Session {
         const std::string deleteArgumentError = "CLIENT_ERROR bad command line format.  Usage: delete <key> [noreply]\r\n";
         const std::string badChunk = "CLIENT_ERROR bad data chunk\r\n";
 
+        const std::string emptyString = "";
+        const std::string cmdAdd = "add";
+        const std::string cmdSet = "set";
+        const std::string cmdReplace = "replace";
+        const std::string cmdAppend = "append";
+        const std::string cmdPrepend = "prepend";
+        const std::string cmdCas = "cas";
+        const std::string cmdIncr = "incr";
+        const std::string cmdDecr = "decr";
+        const std::string cmdTouch = "touch";
+        const std::string cmdDelete = "delete";
+        const std::string cmdGet = "get";
+        const std::string cmdGets = "gets";
+        const std::string cmdStats = "stats";
+        const std::string cmdFlush = "flush_all";
+        const std::string cmdQuit = "quit";
+
         Memcached* memServer;
 
         std::string currentCommand;

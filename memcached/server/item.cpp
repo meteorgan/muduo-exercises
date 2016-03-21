@@ -14,11 +14,11 @@ void Item::set(const std::string& value, uint16_t flags, uint32_t exptime, uint6
     casUnique = cas;
 }
 
-std::string Item::get() {
+std::string Item::get() const {
     return value;
 }
 
-std::pair<std::string, uint64_t> Item::gets() {
+std::pair<std::string, uint64_t> Item::gets() const {
     return std::make_pair(value, casUnique);
 }
 

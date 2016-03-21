@@ -11,7 +11,7 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
 
     while(buffer->findCRLF()) {
         // read command
-        if(currentCommand == "") {
+        if(currentCommand == emptyString) {
             const char* crlf = buffer->findCRLF();
             std::string request(buffer->peek(), crlf);
             buffer->retrieveUntil(crlf + 2);
@@ -20,7 +20,7 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
         }
 
         // read data chunk 
-        if(currentCommand != "" && buffer->readableBytes() >= bytesToRead) {
+        if(currentCommand != emptyString && buffer->readableBytes() >= bytesToRead) {
             std::string request(buffer->peek(), bytesToRead);        
             buffer->retrieve(bytesToRead+2);
 
@@ -33,7 +33,7 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
 
 void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
         const std::string& request) {
-    if(currentCommand == "add") {
+    if(currentCommand == cmdAdd) {
         std::string result;
         if(memServer->exists(currentKey)) {
             result = notStored;
@@ -46,13 +46,13 @@ void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
             conn->send(result);
         }
     }
-    else if(currentCommand == "set") {
+    else if(currentCommand == cmdSet) {
         memServer->set(currentKey, request, flags, expireTime);
         if(!noreply) {
             conn->send(stored);
         }
     }
-    else if(currentCommand == "replace") {
+    else if(currentCommand == cmdReplace) {
         std::string result;
         if(memServer->exists(currentKey)) {
             memServer->set(currentKey, request, flags, expireTime);
@@ -65,7 +65,7 @@ void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
             conn->send(result);
         }
     }
-    else if(currentCommand == "append") {
+    else if(currentCommand == cmdAppend) {
         std::string result;
         if(memServer->exists(currentKey)) {
             memServer->append(currentKey, request);
@@ -78,7 +78,7 @@ void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
             conn->send(result);
         }
     }
-    else if(currentCommand == "prepend") {
+    else if(currentCommand == cmdPrepend) {
         std::string result;
        if(memServer->exists(currentKey)) {
            memServer->prepend(currentKey, request);
@@ -91,10 +91,10 @@ void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
            conn->send(result);
        }
     }
-    else if(currentCommand == "cas") {
+    else if(currentCommand == cmdCas) {
         std::string result;
         if(memServer->exists(currentKey)) {
-            std::shared_ptr<Item> item = memServer->get(currentKey);
+            std::shared_ptr<const Item> item = memServer->get(currentKey);
             uint64_t oldCas = item->getCas();
             if(oldCas != cas) {
                 result = exists;
@@ -126,63 +126,63 @@ void Session::handleCommand(const muduo::net::TcpConnectionPtr& conn,
         const std::string& request) {
     std::vector<std::string> tokens; 
     boost::split(tokens, request, boost::is_any_of(" "));
-    if(tokens[0] == "add") {
+    if(tokens[0] == cmdAdd) {
         if(validateStorageCommand(tokens, 5, conn)) {
             setStorageCommandInfo(tokens, 5);
         }
     }
-    else if(tokens[0] == "set") {
+    else if(tokens[0] == cmdSet) {
         if(validateStorageCommand(tokens, 5, conn)) {
             memServer->memStats().addCmdSetCount();
 
             setStorageCommandInfo(tokens, 5);
         }
     }
-    else if(tokens[0] == "replace") {
+    else if(tokens[0] == cmdReplace) {
         if(validateStorageCommand(tokens, 5, conn)) {
             setStorageCommandInfo(tokens, 5);
         }
     }
-    else if(tokens[0] == "append") {
+    else if(tokens[0] == cmdAppend) {
         if(validateStorageCommand(tokens, 5, conn)) {
             setStorageCommandInfo(tokens, 5);
         }
     }
-    else if(tokens[0] == "prepend") {
+    else if(tokens[0] == cmdPrepend) {
         if(validateStorageCommand(tokens, 5, conn)) {
             setStorageCommandInfo(tokens, 5);
         }
     }
-    else if(tokens[0] == "cas") {
+    else if(tokens[0] == cmdCas) {
         if(validateStorageCommand(tokens, 6, conn)) {
             setStorageCommandInfo(tokens, 6);
         }
     }
-    else if(tokens[0] == "get") {
+    else if(tokens[0] == cmdGet) {
         handleGet(conn, tokens);
     }
-    else if(tokens[0] == "gets") {
+    else if(tokens[0] == cmdGets) {
         handleGetMulti(conn, tokens);
     }
-    else if(tokens[0] == "delete") {
+    else if(tokens[0] == cmdDelete) {
         handleDelete(conn, tokens);
     }
-    else if(tokens[0] == "incr") {  //忽略多余的参数
+    else if(tokens[0] == cmdIncr) {  //忽略多余的参数
         handleIncr(conn, tokens);
     }
-    else if(tokens[0] == "decr") {
+    else if(tokens[0] == cmdDecr) {
         handleDecr(conn, tokens);
     }
-    else if(tokens[0] == "touch") {
+    else if(tokens[0] == cmdTouch) {
         handleTouch(conn, tokens);
     }
-    else if(tokens[0] == "stats") {
+    else if(tokens[0] == cmdStats) {
         handleStats(conn, tokens);
     }
-    else if(tokens[0] == "flush_all") {
+    else if(tokens[0] == cmdFlush) {
         handleFlushAll(conn, tokens);
     }
-    else if(tokens[0] == "quit") {
+    else if(tokens[0] == cmdQuit) {
         conn->shutdown();
     }
     else {
@@ -197,7 +197,7 @@ void Session::handleGet(const muduo::net::TcpConnectionPtr& conn,
     }
     else {
         std::vector<std::string> keys(++tokens.begin(), tokens.end());
-        std::map<std::string, std::shared_ptr<Item>> values = memServer->get(keys);    
+        std::map<std::string, std::shared_ptr<const Item>> values = memServer->get(keys);    
         auto iter = ++tokens.begin();
         while(iter != tokens.end()) {
             auto itemIter = values.find(*iter);
@@ -230,7 +230,7 @@ void Session::handleGetMulti(const muduo::net::TcpConnectionPtr& conn,
     }
     else {
         std::vector<std::string> keys(++tokens.begin(), tokens.end());
-        std::map<std::string, std::shared_ptr<Item>> items = memServer->get(keys);
+        std::map<std::string, std::shared_ptr<const Item>> items = memServer->get(keys);
         auto iter = ++tokens.begin();
         while(iter != tokens.end()) {
             auto itemIter = items.find(*iter);
@@ -297,7 +297,7 @@ void Session::handleIncr(const muduo::net::TcpConnectionPtr& conn,
         memServer->memStats().addIncrMissCount();
     }
     else {
-        std::shared_ptr<Item> item = memServer->get(tokens[1]);
+        std::shared_ptr<const Item> item = memServer->get(tokens[1]);
         if(!isUint64(item->get())) {
             response = nonNumeric;
         }
@@ -331,7 +331,7 @@ void Session::handleDecr(const muduo::net::TcpConnectionPtr& conn,
         memServer->memStats().addDecrMissCount();
     }
     else {
-        std::shared_ptr<Item> item = memServer->get(tokens[1]);
+        std::shared_ptr<const Item> item = memServer->get(tokens[1]);
         if(!isUint64(item->get())) {
             response = nonNumeric;
         }

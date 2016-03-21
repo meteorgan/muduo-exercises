@@ -10,9 +10,9 @@ class Item {
 
         void set(const std::string& newValue, uint16_t flags, uint32_t exptime, uint64_t cas);
 
-        std::string get();
+        std::string get() const;
 
-        std::pair<std::string, uint64_t> gets();
+        std::pair<std::string, uint64_t> gets() const;
 
         void append(const std::string& app, uint64_t cas);
 
@@ -26,9 +26,9 @@ class Item {
 
         bool isExpire();
 
-        uint16_t getFlags() { return flags; }
+        uint16_t getFlags() const { return flags; }
 
-        uint64_t getCas() { return casUnique; }
+        uint64_t getCas() const { return casUnique; }
 
     private:
         std::string key;
