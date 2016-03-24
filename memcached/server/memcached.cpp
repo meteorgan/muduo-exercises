@@ -10,7 +10,7 @@
 Memcached::Memcached(muduo::net::EventLoop* loop, 
         const muduo::net::InetAddress& listenAddr, int threadNum) 
     : listenAddr(listenAddr), casUnique(0), numThread(threadNum), server(loop, listenAddr, "Memcached"),
-      inspectorLoop(), inspector(inspectorLoop.startLoop(), muduo::net::InetAddress(11215), "memcached-stats") {
+      inspectorLoopThread(), inspector(inspectorLoopThread.startLoop(), muduo::net::InetAddress(11215), "memcached-stats") {
         server.setConnectionCallback(boost::bind(&Memcached::onConnection, this, _1));
 
         inspector.add("memcached", "stats", boost::bind(&MemcachedStat::report, &stats_), "statistics of memcached");
@@ -24,7 +24,7 @@ void Memcached::start() {
 void Memcached::onConnection(const muduo::net::TcpConnectionPtr& conn) {
     std::string name(conn->name().c_str());
     if(conn->connected()) {
-        LOG_INFO << conn->peerAddress().toIpPort() << " is UP.";
+        LOG_INFO << name << " is UP.";
         std::unique_ptr<Session> session(new Session(this, conn));
         sessions[name] = std::move(session);
 
@@ -32,7 +32,8 @@ void Memcached::onConnection(const muduo::net::TcpConnectionPtr& conn) {
         stats_.addTotalConnections();
     }
     else {
-        LOG_INFO << conn->peerAddress().toIpPort() << " is DOWN.";
+        LOG_INFO << "inputBuffer size: " << conn->inputBuffer()->internalCapacity() 
+                 << " outputBuffer size: " << conn->outputBuffer()->internalCapacity();
         sessions.erase(name);
         stats_.addCurrConnections(-1);
     }

@@ -55,7 +55,7 @@ class Memcached {
         int numThread;
         muduo::net::TcpServer server;
 
-        muduo::net::EventLoopThread inspectorLoop;
+        muduo::net::EventLoopThread inspectorLoopThread;
         muduo::net::Inspector inspector; 
         MemcachedStat stats_;
 

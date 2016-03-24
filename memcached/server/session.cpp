@@ -13,7 +13,8 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
         // read command
         if(currentCommand == emptyString) {
             const char* crlf = buffer->findCRLF();
-            std::string request(buffer->peek(), crlf);
+            size_t len = crlf - buffer->peek();
+            std::string request(buffer->peek(), len);
             buffer->retrieveUntil(crlf + 2);
 
             handleCommand(conn, request);
@@ -199,6 +200,7 @@ void Session::handleGet(const muduo::net::TcpConnectionPtr& conn,
         std::vector<std::string> keys(++tokens.begin(), tokens.end());
         std::map<std::string, std::shared_ptr<const Item>> values = memServer->get(keys);    
         auto iter = ++tokens.begin();
+        std::string response("");
         while(iter != tokens.end()) {
             auto itemIter = values.find(*iter);
             if(itemIter != values.end()) {
@@ -206,10 +208,9 @@ void Session::handleGet(const muduo::net::TcpConnectionPtr& conn,
                 std::string value = itemIter->second->get();
                 uint16_t flags = itemIter->second->getFlags();
                 size_t size = value.size(); 
-                std::string line = "VALUE " + key + " " + std::to_string(flags) 
+                response += "VALUE " + key + " " + std::to_string(flags) 
                     + " " + std::to_string(size) + "\r\n";
-                conn->send(line);
-                conn->send(value + "\r\n");
+                response += value + "\r\n";
 
                 memServer->memStats().addCmdGetHitCount();
             }
@@ -219,7 +220,8 @@ void Session::handleGet(const muduo::net::TcpConnectionPtr& conn,
             ++iter;
             memServer->memStats().addCmdGetCount();
         }
-        conn->send(end);
+        response += end;
+        conn->send(response);
     }
 }
 
@@ -229,6 +231,7 @@ void Session::handleGetMulti(const muduo::net::TcpConnectionPtr& conn,
         conn->send(nonExistentCommand);
     }
     else {
+        std::string response("");
         std::vector<std::string> keys(++tokens.begin(), tokens.end());
         std::map<std::string, std::shared_ptr<const Item>> items = memServer->get(keys);
         auto iter = ++tokens.begin();
@@ -241,14 +244,14 @@ void Session::handleGetMulti(const muduo::net::TcpConnectionPtr& conn,
                 uint64_t cas = itemIter->second->getCas();
                 size_t size = value.size();
 
-                std::string line = "VALUE " + key + " " + std::to_string(flags)
+                response += "VALUE " + key + " " + std::to_string(flags)
                     + " " + std::to_string(size) + " " + std::to_string(cas) + "\r\n";
-                conn->send(line);
-                conn->send(value+"\r\n");
+                response += value+"\r\n";
             }
             ++iter;
         }
-        conn->send(end);
+        response += end;
+        conn->send(response);
     }
 }
 
