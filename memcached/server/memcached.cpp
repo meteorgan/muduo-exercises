@@ -25,6 +25,7 @@ void Memcached::onConnection(const muduo::net::TcpConnectionPtr& conn) {
     std::string name(conn->name().c_str());
     if(conn->connected()) {
         LOG_INFO << name << " is UP.";
+        conn->setTcpNoDelay(true);
         std::unique_ptr<Session> session(new Session(this, conn));
         sessions[name] = std::move(session);
 

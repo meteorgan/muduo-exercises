@@ -47,6 +47,8 @@ class Session {
         bool isUint16(const std::string& str);
         bool isUint(const std::string& str, const std::string& uint);
 
+        void split(const std::string& str, std::vector<std::string>& tokens);
+
         bool validateStorageCommand(const std::vector<std::string>& tokens, size_t size, const muduo::net::TcpConnectionPtr& conn);
         void setStorageCommandInfo(const std::vector<std::string>& tokens, size_t size);
 

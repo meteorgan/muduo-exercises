@@ -13,11 +13,16 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
         // read command
         if(currentCommand == emptyString) {
             const char* crlf = buffer->findCRLF();
-            size_t len = crlf - buffer->peek();
-            std::string request(buffer->peek(), len);
-            buffer->retrieveUntil(crlf + 2);
+            if(crlf) {
+                size_t len = crlf - buffer->peek();
+                std::string request(buffer->peek(), len);
+                buffer->retrieveUntil(crlf + 2);
 
-            handleCommand(conn, request);
+                handleCommand(conn, request);
+            }
+            else {
+                break;
+            }
         }
 
         // read data chunk 
@@ -123,10 +128,24 @@ void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
     }
 }
 
+void Session::split(const std::string& str, std::vector<std::string>& tokens) {
+    size_t pos = 0;
+    size_t len = str.length();
+    for(size_t i = 0; i < len; ++i) {
+        if(str[i] == ' ') {
+            tokens.push_back(std::string(str, pos, i-pos));
+            pos = i + 1;
+        }
+    }
+    if(pos <= len - 1) {
+        tokens.push_back(std::string(str, pos, len-pos));
+    }
+}
+
 void Session::handleCommand(const muduo::net::TcpConnectionPtr& conn,
         const std::string& request) {
     std::vector<std::string> tokens; 
-    boost::split(tokens, request, boost::is_any_of(" "));
+    split(request, tokens);
     if(tokens[0] == cmdAdd) {
         if(validateStorageCommand(tokens, 5, conn)) {
             setStorageCommandInfo(tokens, 5);
