@@ -104,6 +104,7 @@ class Session {
         uint64_t cas;
         bool noreply;
         uint32_t flushTime;
+        muduo::net::Buffer outputBuf;
 };
 
 #endif

@@ -129,22 +129,24 @@ void Session::handleDataChunk(const muduo::net::TcpConnectionPtr& conn,
 }
 
 void Session::split(const std::string& str, std::vector<std::string>& tokens) {
-    size_t pos = 0;
-    size_t len = str.length();
-    for(size_t i = 0; i < len; ++i) {
-        if(str[i] == ' ') {
-            tokens.push_back(std::string(str, pos, i-pos));
-            pos = i + 1;
+    auto iter = str.begin(); 
+    auto pre = iter;
+    while(iter != str.end()) {
+        if(*iter == ' ') {
+            tokens.push_back(std::string(pre, iter));
+            pre = iter + 1;
         }
+        ++iter;
     }
-    if(pos <= len - 1) {
-        tokens.push_back(std::string(str, pos, len-pos));
+    if(pre != str.end()) {
+        tokens.push_back(std::string(pre, str.end()));
     }
 }
 
 void Session::handleCommand(const muduo::net::TcpConnectionPtr& conn,
         const std::string& request) {
     std::vector<std::string> tokens; 
+    //boost::split(tokens, request, boost::is_any_of(" "));
     split(request, tokens);
     if(tokens[0] == cmdAdd) {
         if(validateStorageCommand(tokens, 5, conn)) {
@@ -219,7 +221,6 @@ void Session::handleGet(const muduo::net::TcpConnectionPtr& conn,
         std::vector<std::string> keys(++tokens.begin(), tokens.end());
         std::map<std::string, std::shared_ptr<const Item>> values = memServer->get(keys);    
         auto iter = ++tokens.begin();
-        std::string response("");
         while(iter != tokens.end()) {
             auto itemIter = values.find(*iter);
             if(itemIter != values.end()) {
@@ -227,9 +228,8 @@ void Session::handleGet(const muduo::net::TcpConnectionPtr& conn,
                 std::string value = itemIter->second->get();
                 uint16_t flags = itemIter->second->getFlags();
                 size_t size = value.size(); 
-                response += "VALUE " + key + " " + std::to_string(flags) 
-                    + " " + std::to_string(size) + "\r\n";
-                response += value + "\r\n";
+                outputBuf.append("VALUE " + key + " " + std::to_string(flags) + " " + std::to_string(size) + "\r\n");
+                outputBuf.append(value + "\r\n");
 
                 memServer->memStats().addCmdGetHitCount();
             }
@@ -239,8 +239,8 @@ void Session::handleGet(const muduo::net::TcpConnectionPtr& conn,
             ++iter;
             memServer->memStats().addCmdGetCount();
         }
-        response += end;
-        conn->send(response);
+        outputBuf.append(end);
+        conn->send(&outputBuf);
     }
 }
 
