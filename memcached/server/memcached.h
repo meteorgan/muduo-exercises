@@ -45,11 +45,14 @@ class Memcached {
 
         bool exists(const std::string& key);
 
+        uint32_t convertExpireTime(uint32_t t);
+
         MemcachedStat& memStats();
 
     private:
         void onConnection(const muduo::net::TcpConnectionPtr& conn);
 
+        uint32_t flush_time;
         muduo::net::InetAddress listenAddr;
         std::atomic<uint64_t> casUnique;
         int numThread;

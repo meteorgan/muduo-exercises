@@ -26,9 +26,9 @@ void Session::onMessage(const muduo::net::TcpConnectionPtr& conn,
         }
 
         // read data chunk 
-        if(currentCommand != emptyString && buffer->readableBytes() >= bytesToRead) {
+        if(currentCommand != emptyString && buffer->readableBytes() >= bytesToRead+2) {
             std::string request(buffer->peek(), bytesToRead);        
-            buffer->retrieve(bytesToRead+2);
+            buffer->retrieve(bytesToRead + 2);
 
             handleDataChunk(conn, request);
             currentCommand = "";
@@ -145,6 +145,10 @@ void Session::split(const std::string& str, std::vector<std::string>& tokens) {
 
 void Session::handleCommand(const muduo::net::TcpConnectionPtr& conn,
         const std::string& request) {
+    if(request.size() == 0) {
+        conn->send(nonExistentCommand);
+        return;
+    }
     std::vector<std::string> tokens; 
     //boost::split(tokens, request, boost::is_any_of(" "));
     split(request, tokens);
@@ -386,7 +390,7 @@ void Session::handleTouch(const muduo::net::TcpConnectionPtr& conn,
 
         if(memServer->exists(tokens[1])) {
             uint32_t t = static_cast<uint32_t>(std::stoul(tokens[2]));
-            uint32_t exp = convertExpireTime(t);
+            uint32_t exp = toExpireTimestamp(t);
             memServer->touch(tokens[1], exp);;
             response = touched;
 
@@ -447,7 +451,6 @@ void Session::handleFlushAll(const muduo::net::TcpConnectionPtr& conn,
     if(!noreply) {
         conn->send(result);
     }
-    flushTime = exptime;   // override flushTime before
 }
 
 bool Session::isAllNumber(std::vector<std::string>::const_iterator begin, 
@@ -497,7 +500,7 @@ bool Session::validateStorageCommand(const std::vector<std::string>& tokens, siz
         const muduo::net::TcpConnectionPtr& conn) {
     bool result = true;
     if(tokens.size() < size) {
-        conn->send(nonExistentCommand);
+        conn->send(badFormat);
         result = false;
     }
     else {
@@ -520,21 +523,11 @@ void Session::setStorageCommandInfo(const std::vector<std::string>& tokens, size
     currentKey = tokens[1];
     flags = static_cast<uint16_t>(stoul(tokens[2]));
     uint32_t t = static_cast<uint32_t>(std::stoul(tokens[3]));
-    expireTime = convertExpireTime(t);
+    expireTime = toExpireTimestamp(t);
     bytesToRead = static_cast<uint32_t>(stoul(tokens[4]));
     if(size == 6) {
         cas = stoull(tokens[5]);
     }
-}
-
-uint32_t Session::convertExpireTime(uint32_t expt) {
-    uint32_t time = toExpireTimestamp(expt);
-    uint32_t now = static_cast<uint32_t>(muduo::Timestamp::now().secondsSinceEpoch());
-    if(flushTime > now && (expt > flushTime || expt == 0)) {
-       time = flushTime; 
-    }
-
-    return time;
 }
 
 // 0 means forever

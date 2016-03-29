@@ -9,7 +9,7 @@
 
 Memcached::Memcached(muduo::net::EventLoop* loop, 
         const muduo::net::InetAddress& listenAddr, int threadNum) 
-    : listenAddr(listenAddr), casUnique(0), numThread(threadNum), server(loop, listenAddr, "Memcached"),
+    : flush_time(0), listenAddr(listenAddr), casUnique(0), numThread(threadNum), server(loop, listenAddr, "Memcached"),
       inspectorLoopThread(), inspector(inspectorLoopThread.startLoop(), muduo::net::InetAddress(11215), "memcached-stats") {
         server.setConnectionCallback(boost::bind(&Memcached::onConnection, this, _1));
 
@@ -44,15 +44,16 @@ void Memcached::set(const std::string& key, const std::string& value,
         uint16_t flags, uint32_t exptime) {
     ++casUnique;
 
+    uint32_t exp = convertExpireTime(exptime);
     size_t index = hashFunc(key) % kShards; 
     {
         std::lock_guard<std::mutex> lock(shards[index].itemLock);
         auto iter = shards[index].items.find(key);
         if(iter != shards[index].items.end()) {
-            iter->second->set(value, flags, exptime, casUnique);
+            iter->second->set(value, flags, exp, casUnique);
         }
         else {
-            std::shared_ptr<Item> item(new Item(key, value, flags, exptime, casUnique));
+            std::shared_ptr<Item> item(new Item(key, value, flags, exp, casUnique));
             shards[index].items[key] = item;
 
             stats_.addTotalItems();
@@ -150,16 +151,18 @@ uint64_t Memcached::decr(const std::string& key, uint64_t decrement) {
 }
 
 void Memcached::touch(const std::string& key, uint32_t exptime) {
+    uint32_t exp = convertExpireTime(exptime);
     size_t index = hashFunc(key) % kShards;
     {
         std::lock_guard<std::mutex> lock(shards[index].itemLock);
         auto iter = shards[index].items.find(key);
         assert(iter != shards[index].items.end());
-        iter->second->touch(exptime);
+        iter->second->touch(exp);
     }
 }
 
 void Memcached::flush_all(uint32_t exptime) {
+    flush_time = exptime;
     uint32_t t = static_cast<uint32_t>(muduo::Timestamp::now().secondsSinceEpoch()) - 1;
     if(exptime != 0) {
         t = exptime;
@@ -193,6 +196,16 @@ bool Memcached::exists(const std::string& key) {
 
 MemcachedStat& Memcached::memStats() {
     return stats_;    
+}
+
+uint32_t Memcached::convertExpireTime(uint32_t time) {
+    uint32_t exp = time;
+    uint32_t now = static_cast<uint32_t>(muduo::Timestamp::now().secondsSinceEpoch());
+    if(flush_time >= now && (time > flush_time || time == 0)) {
+        exp = flush_time;
+    }
+
+    return exp;
 }
 
 
